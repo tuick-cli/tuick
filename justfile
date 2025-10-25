@@ -17,6 +17,7 @@ dev: compile check test format
 # Agent workflow: check, test with minimal output
 [group('agent')]
 agent: agent-compile agent-check agent-test
+    @echo OK
 
 # Clean generated files
 [group('dev')]
@@ -56,6 +57,7 @@ agent-test *ARGS:
     fail_with () { local s=$?; "$@"; return $s; }
     quietly () { output=$("$@" >&1) || fail_with echo "$output"; }
     quietly uv run --dev pytest --no-header --quiet --tb=short {{ ARGS }}
+    if ! {{ is_dependency() }}; then echo OK; fi
 
 
 # Static code analysis and style checks
@@ -91,10 +93,12 @@ concise := "--output-format concise"
 [group('agent')]
 [no-exit-message]
 agent-check: agent-compile
-    @uv run --dev ruff format --check {{ concise }} {{ python_dirs }}
+    @uv run --dev ruff format --check --quiet {{ python_dirs }} \
+    || { echo 'Try "just format"' >&2 ; false; }
     @uv run --dev docformatter --check {{ python_dirs }}
     @uv run --dev ruff check --quiet {{ concise }} {{ python_dirs }}
     @uv run --dev mypy {{ python_dirs }}
+    @if ! {{ is_dependency() }}; then echo OK; fi
 
 
 # Ruff auto-fix
