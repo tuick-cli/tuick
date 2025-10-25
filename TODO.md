@@ -1,8 +1,5 @@
 # Tuick Task List
 
-- Modify CLI and integration with fzf, remove subcommand. Command now does what
-  list used to do. Reload and select are now (exclusive) options. Update
-  justfile.
 - Make all tests currently expected fail pass.
 - Make select command not fail if no url is found, just be no-op.
 - Write failing test for iterator that yields whenever a filesystem change

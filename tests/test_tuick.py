@@ -1,8 +1,31 @@
 """Tests for the tui-checker tool."""
 
-import pytest
+from subprocess import CompletedProcess
+from typing import Any
+from unittest.mock import MagicMock, patch
 
-from tuick import split_blocks
+import pytest
+from typer.testing import CliRunner
+
+from tuick import app, split_blocks
+
+runner = CliRunner()
+
+
+def make_env_capturer(
+    stdout: str = "", returncode: int = 0
+) -> tuple[dict[str, str], Any]:
+    """Return env dict and callback that captures subprocess env."""
+    captured_env: dict[str, str] = {}
+
+    def capture_env(*args: Any, **kwargs: Any) -> CompletedProcess[str]:  # noqa: ANN401
+        captured_env.update(kwargs.get("env", {}))
+        return CompletedProcess(
+            args=[], returncode=returncode, stdout=stdout, stderr=""
+        )
+
+    return captured_env, capture_env
+
 
 MYPY_BLOCKS = [
     "src/jobsearch/search.py:58: error: Returning Any from function...",
@@ -278,3 +301,49 @@ def test_split_blocks_pytest(blocks: list[str]) -> None:
     input_text = "\n".join(blocks)
     null_delimited = split_blocks(input_text)
     assert null_delimited.split("\0") == blocks
+
+
+def test_cli_default_launches_fzf() -> None:
+    """Default command launches fzf with FZF_DEFAULT_COMMAND set."""
+    captured_env, capture_env = make_env_capturer()
+
+    with (
+        patch("tuick.subprocess.run", side_effect=capture_env),
+        patch("tuick.sys.argv", ["tuick", "ruff"]),
+    ):
+        runner.invoke(app, ["--", "ruff", "check", "src/"])
+        assert "FZF_DEFAULT_COMMAND" in captured_env
+        assert (
+            "tuick --reload -- ruff check src/"
+            in captured_env["FZF_DEFAULT_COMMAND"]
+        )
+
+
+def test_cli_reload_option() -> None:
+    """--reload option runs command with FORCE_COLOR=1."""
+    captured_env, capture_env = make_env_capturer(
+        stdout="src/test.py:1: error: Test\n"
+    )
+
+    with patch("tuick.subprocess.run", side_effect=capture_env):
+        result = runner.invoke(app, ["--reload", "--", "mypy", "src/"])
+        assert captured_env["FORCE_COLOR"] == "1"
+        assert result.stdout == "src/test.py:1: error: Test"
+
+
+def test_cli_select_option() -> None:
+    """--select option opens editor at location."""
+    with patch("tuick.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        runner.invoke(app, ["--select", "src/test.py:10:5: error: Test"])
+        assert mock_run.call_args[0] == (
+            ["code", "--goto", "src/test.py:10:5"],
+        )
+
+
+def test_cli_exclusive_options() -> None:
+    """--reload and --select are mutually exclusive."""
+    result = runner.invoke(
+        app, ["--reload", "--select", "foo", "--", "mypy", "src/"]
+    )
+    assert result.exit_code != 0

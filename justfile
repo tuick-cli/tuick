@@ -76,9 +76,9 @@ tuick: compile
     uv run --dev docformatter --check {{ python_dirs }} \
     || read -p "Auto-format? (enter or ctrl-C) " \
     && uv run --dev docformatter --in-place {{ python_dirs }}
-    uv run --dev tuick list -- ruff check --quiet {{ python_dirs }}
-    uv run --dev tuick list -- mypy {{ python_dirs }}
-    uv run --dev pytest --no-header {{ ARGS }}
+    uv run --dev tuick -- ruff check --quiet {{ python_dirs }}
+    uv run --dev tuick -- mypy {{ python_dirs }}
+    uv run --dev pytest --no-header
 
 
 # Report FIXME, TODO, XXX, HACK comments
