@@ -1,0 +1,14 @@
+# Hidden files
+.*
+!.gitignore
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# hatch-mypyc, which gets invoked by "uv sync" leaves .so files in src
+/src/**/*.so

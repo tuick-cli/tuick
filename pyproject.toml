@@ -1,0 +1,123 @@
+[project]
+name = "tuick"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+authors = [
+    { name = "David Allouche", email = "david@allouche.net" },
+]
+
+dependencies = [
+    "rich>=14.2.0",
+    "typer>=0.20.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+tuick = "tuick:app"
+
+[dependency-groups]
+dev = [
+    "docformatter>=1.7.7",
+    "isort>=7.0.0",
+    "mypy[mypyc]>=1.18.2",
+    "pytest>=8.4.2",
+    "ruff>=0.14.2",
+]
+
+[tool.docformatter]
+recursive = true
+in-place = true
+wrap-summaries = 79
+wrap-descriptions = 79
+
+[tool.ruff]
+line-length = 79
+indent-width = 4
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D203",     # no blank line required before class docstring
+    "D213",     # multi-line docstring summary should start at the first line
+    "S603",     # subprocess call
+    "PLR2004",  # Magic value used in comparison
+    "EM",       # Error message can be duplicated in traceback, no problem.
+    "TD002",    # missing-todo-author
+    "TD003",    # missing-todo-link
+    "FIX",      # FIXME comments should not cause failure
+
+    # Rules that should be disabled when using ruff as a formatter.
+    # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
+    "W191",     # tab-indentation
+    "E111",     # indentation-with-invalid-multiple
+    "E114",     # indentation-with-invalid-multiple-comment
+    "E117",     # over-indented
+    "D206",     # docstring-tab-indentation
+    "D300",     # triple-single-quotes
+    "Q000",     # bad-quotes-inline-string
+    "Q001",     # bad-quotes-multiline-string
+    "Q002",     # bad-quotes-docstring
+    "Q003",     # avoidable-escaped-quote
+    "COM812",   # missing-trailing-comma
+    "COM819",   # prohibited-trailing-comma
+    "ISC002",   # multi-line-implicit-string-concatenation
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "ANN201",   # Missing return type for public function
+    "ANN202",   # Missing return type for private function
+    "S101",     # Assert statements
+    "ARG",      # Unused function arguments
+    # "FBT",    # Ignore boolean traps in test parameters
+    "SLF001",   # Private member accessed
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+files = ["src", "tests"]
+strict = true
+extra_checks = true
+error_summary = false
+# Turn on experimental option
+# https://mypy.readthedocs.io/en/stable/config_file.html#confval-allow_redefinition_new
+allow_redefinition_new = true
+local_partial_types = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.ty.terminal]
+error-on-warning = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tuick.py"]
+
+[tool.hatch.build.targets.wheel.hooks.mypyc]
+dependencies = ["hatch-mypyc"]
+require-runtime-dependencies = true
+require-runtime-features = ["mypyc"]
+
+# Maybe we should use setuptools, because hatch-mypyc does not seem baked yet.
+# https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
+
+# That SHOULD work, but does not.
+# https://github.com/ofek/hatch-mypyc/issues/37
+# mypy-args = ["--config-file=pyproject.toml"]
+
+# That SHOULD be overridable by env vars, but is not.
+# https://github.com/ofek/hatch-mypyc/issues/43
+enable-by-default = false

@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""Tuick, the Text User Interface for Compilers and checKers.
+
+Tuick is a wrapper for compilers and checkers that integrates with fzf and your
+text editor to provide fluid, keyboard-friendly, access to code error
+locations.
+"""
+
+import os
+import re
+import shlex
+import subprocess
+import sys
+import typing
+
+if typing.TYPE_CHECKING:
+    from collections.abc import Iterable
+
+import typer
+from rich.console import Console
+
+app = typer.Typer()
+
+err_console = Console(stderr=True)
+
+# ruff: noqa: S607 start-process-with-partial-path
+
+# TODO: use watchexec to detect changes, and trigger fzf reload through socket
+
+# TODO: exit when command output is empty. We cannot do that within fzf,
+# because it has no event for empty input, just for zero matches.
+# We need a socket connection
+
+
+def quote_command(words: Iterable[str]) -> str:
+    """Shell quote words and join in a single command string."""
+    return " ".join(shlex.quote(x) for x in words)
+
+
+@app.command("list")
+def list_(command: list[str]) -> None:
+    """List errors from running COMMAND."""
+    myself = sys.argv[0]
+    reload_command = quote_command([myself, "reload", "--", *command])
+    select_command = quote_command([myself, "select"])
+    env = os.environ.copy()
+    env["FZF_DEFAULT_COMMAND"] = reload_command
+    result = subprocess.run(
+        [
+            "fzf",
+            "--read0",
+            "--ansi",
+            "--no-sort",
+            "--reverse",
+            "--disabled",
+            "--color=dark",
+            "--highlight-line",
+            "--wrap",
+            "--no-input",
+            "--bind",
+            ",".join(
+                [
+                    f"enter,right:execute({select_command} {{}})",
+                    f"r:reload({reload_command})",
+                    "q:abort",
+                    "space:down",
+                    "backspace:up",
+                ]
+            ),
+        ],
+        env=env,
+        text=True,
+        check=False,
+    )
+    if result.returncode not in [0, 130]:
+        # 130 means fzf was aborted with ctrl-C or ESC
+        sys.exit(result.returncode)
+
+
+@app.command()
+def reload(command: list[str]) -> None:
+    """Run COMMAND, splitting output into blocks."""
+    blocks = run_and_split_blocks(command)
+    sys.stdout.write(blocks)
+
+
+def run_and_split_blocks(command: list[str]) -> str:
+    """Run COMMAND with FORCE_COLOR=1 and split output into blocks."""
+    env = os.environ.copy()
+    env["FORCE_COLOR"] = "1"
+    result = subprocess.run(
+        command, capture_output=True, text=True, env=env, check=False
+    )
+    return split_blocks(result.stdout)
+
+
+def split_blocks(text: str) -> str:
+    """Split text into NULL-separated blocks."""
+    if not text:
+        return ""
+    # If first line matches the LINE_REGEX, we are in line mode
+    if re.match(LINE_REGEX, text):
+        return text.rstrip().replace("\n", "\0")
+    # Handle Ruff full format, split on blank lines
+    return "".join(
+        "\0" if x == "\n" else x for x in text.splitlines(keepends=True)
+    )
+
+
+LINE_REGEX = re.compile(
+    r"""^([^:]+         # File name
+          :\d+          # Line number
+          (?::\d+)?     # Column number
+         )
+         (?::\d+:\d+)?  # Line and column of end
+         :[ ].+         # Message
+    """,
+    re.MULTILINE + re.VERBOSE,
+)
+RUFF_REGEX = re.compile(
+    r"""^[ ]*-->[ ]  # Arrow marker, preceded by number column width padding
+        ([^:]+       # File name
+        :\d+         # Line number
+        :\d+         # Column number
+        )$
+    """,
+    re.MULTILINE + re.VERBOSE,
+)
+
+
+@app.command()
+def select(selection: str) -> None:
+    """Display the selected error in the text editor."""
+    regex = RUFF_REGEX if "\n" in selection else LINE_REGEX
+    match = re.search(regex, selection)
+    if match is None:
+        pattern = {LINE_REGEX: "line", RUFF_REGEX: "ruff"}[regex]
+        err_console.print("[bold red]Line pattern not found:", pattern)
+        err_console.print("[bold]Input:", repr(selection))
+        raise typer.Exit(1)
+    destination = match.group(1)
+    editor_command = ["code", "--goto", destination]
+    result = subprocess.run(
+        editor_command, check=False, capture_output=True, text=True
+    )
+    if result.returncode or result.stderr:
+        err_console.print(
+            "[bold red]Error running editor:",
+            " ".join(shlex.quote(x) for x in editor_command),
+        )
+        if result.stderr:
+            err_console.print(result.stderr)
+
+
+if __name__ == "__main__":
+    app()
