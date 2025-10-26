@@ -273,15 +273,40 @@ def test_split_blocks_pytest(blocks: list[str]) -> None:
     assert blocks == blocks_from_text(input_text)
 
 
-def test_get_location_mypy() -> None:
-    """Extract location from mypy line format."""
-    assert FileLocation(
-        path="src/jobsearch/search.py", row=58, column=None
-    ) == get_location(MYPY_BLOCKS[0])
-
-
-def test_get_location_ruff() -> None:
-    """Extract location from ruff full format."""
-    assert FileLocation(
-        path="src/jobsearch/search_cli.py", row=8, column=1
-    ) == get_location(RUFF_FULL_BLOCKS[0])
+@pytest.mark.parametrize(
+    ("block", "expected"),
+    [
+        (MYPY_BLOCKS[0], FileLocation("src/jobsearch/search.py", 58)),
+        (
+            MYPY_FANCY_BLOCKS[0],
+            FileLocation("src/jobsearch/cadremploi_scraper.py", 43, 35),
+        ),
+        (
+            MYPY_ABSOLUTE_BLOCKS[0],
+            FileLocation("/path/to/src/jobsearch/cadremploi_scraper.py", 43),
+        ),
+        (
+            MYPY_VERY_FANCY_BLOCKS[0],
+            FileLocation("src/jobsearch/search.py", 58, 5),
+        ),
+        (
+            RUFF_FULL_BLOCKS[0],
+            FileLocation("src/jobsearch/search_cli.py", 8, 1),
+        ),
+        (
+            RUFF_CONCISE_BLOCKS[0],
+            FileLocation("src/jobsearch/search_cli.py", 8, 1),
+        ),
+        (PYTEST_AUTO_BLOCKS[1], FileLocation("tests/test_search.py", 133)),
+        (PYTEST_SHORT_BLOCKS[1], FileLocation("tests/test_search.py", 133)),
+        (
+            PYTEST_LINE_BLOCKS[1],
+            FileLocation(
+                "/Users/david/code/jobsearch/tests/test_search.py", 133
+            ),
+        ),
+    ],
+)
+def test_get_location(block: str, expected: FileLocation) -> None:
+    """Extract location from all supported formats."""
+    assert expected == get_location(block)

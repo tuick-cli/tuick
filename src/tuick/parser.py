@@ -61,7 +61,7 @@ class FileLocationNotFoundError(ValueError):
 
 LINE_REGEX = re.compile(
     r"""^([^\s:]        # File name, with no colon, not indented
-          [^:]*         # File name may contain spaces after first char
+          [^:\n]*       # File name may contain spaces after first char
           :\d+          # Line number
           (?::\d+)?     # Column number
          )
@@ -257,8 +257,9 @@ def get_location(selection: str) -> FileLocation:
     Raises:
         FileLocationNotFoundError: If location pattern not found
     """
-    regex = RUFF_REGEX if "\n" in selection else LINE_REGEX
-    match = re.search(regex, selection)
+    match = re.search(LINE_REGEX, selection)
+    if match is None:
+        match = re.search(RUFF_REGEX, selection)
     if match is None:
         raise FileLocationNotFoundError(selection)
 
