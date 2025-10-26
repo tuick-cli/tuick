@@ -13,6 +13,7 @@ import subprocess
 import sys
 import typing
 from dataclasses import dataclass
+from enum import Enum, auto
 
 if typing.TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -23,6 +24,24 @@ from rich.console import Console
 app = typer.Typer()
 
 err_console = Console(stderr=True)
+
+
+class State(Enum):
+    """State machine states for block splitting."""
+
+    START = auto()
+    NORMAL = auto()
+    NOTE_CONTEXT = auto()
+
+
+class LineType(Enum):
+    """Types of lines in linter output."""
+
+    BLANK = auto()
+    NOTE = auto()
+    LOCATION = auto()
+    SUMMARY = auto()
+    OTHER = auto()
 
 
 @dataclass
@@ -162,72 +181,9 @@ def split_blocks(lines: Iterable[str]) -> Iterator[str]:
     Yields:
         Chunks of the \0-separated stream
     """
-    first_block = True
-    pending_nl = ""
-    prev_location = None
-    note_path = None  # Path from most recent note line
-
+    splitter = BlockSplitter()
     for line in lines:
-        text, trailing_nl = (
-            line.removesuffix("\n"),
-            "\n" if line.endswith("\n") else "",
-        )
-        if not text:
-            # Blank line resets state, next non-blank starts new block
-            pending_nl = ""
-            prev_location = None
-            note_path = None
-            continue
-
-        # Check if this line starts a new block
-        starts_new_block = False
-
-        if re.match(MYPY_NOTE_REGEX, text):
-            # Note line always starts new block
-            starts_new_block = True
-            note_path = text.split(":")[0]
-            prev_location = None
-        elif match := re.match(LINE_REGEX, text):
-            # Extract location (path:line or path:line:col)
-            current_location = match.group(1)
-            current_path = current_location.split(":")[0]
-
-            # Continue block if in note context and paths match
-            if note_path is not None and current_path == note_path:
-                # Continue the note block
-                prev_location = current_location
-            elif (
-                prev_location is not None and current_location != prev_location
-            ):
-                # Different location, start new block
-                starts_new_block = True
-                prev_location = current_location
-                note_path = None
-            else:
-                # First location or same location
-                prev_location = current_location
-                note_path = None
-        elif re.match(SUMMARY_REGEX, text) or re.match(PYTEST_SEP_REGEX, text):
-            starts_new_block = True
-            prev_location = None
-            note_path = None
-        else:
-            # Regular line, doesn't change state
-            pass
-
-        if starts_new_block:
-            if not first_block:
-                yield "\0"
-            pending_nl = ""  # Don't carry newline into new block
-
-        # Always clear first_block after processing first line
-        if first_block:
-            first_block = False
-
-        yield pending_nl
-        yield text
-        pending_nl = trailing_nl
-    # Don't yield final newline - blocks shouldn't end with newline
+        yield from splitter.process_line(line)
 
 
 LINE_REGEX = re.compile(
@@ -267,6 +223,128 @@ RUFF_REGEX = re.compile(
     """,
     re.MULTILINE + re.VERBOSE,
 )
+
+
+def classify_line(text: str) -> LineType:
+    """Classify a line by its type for block splitting."""
+    if not text:
+        return LineType.BLANK
+    if re.match(MYPY_NOTE_REGEX, text):
+        return LineType.NOTE
+    if re.match(LINE_REGEX, text):
+        return LineType.LOCATION
+    if re.match(SUMMARY_REGEX, text) or re.match(PYTEST_SEP_REGEX, text):
+        return LineType.SUMMARY
+    return LineType.OTHER
+
+
+def extract_location_str(text: str) -> str | None:
+    """Extract location string (path:line:col) from a line.
+
+    Returns:
+        Location string like "path:line" or "path:line:col",
+        or None if no match
+    """
+    if match := re.match(LINE_REGEX, text):
+        return match.group(1)
+    return None
+
+
+class BlockSplitter:
+    """State machine for splitting linter output into blocks."""
+
+    def __init__(self) -> None:
+        """Initialize the block splitter."""
+        self.state = State.START
+        self.pending_nl = ""
+        self.prev_location: str | None = None
+        self.note_path: str | None = None
+        self.first_block = True
+
+    def process_line(self, line: str) -> Iterator[str]:
+        """Process a line and yield output chunks."""
+        text, trailing_nl = (
+            line.removesuffix("\n"),
+            "\n" if line.endswith("\n") else "",
+        )
+        line_type = classify_line(text)
+
+        if line_type == LineType.BLANK:
+            self._reset_state()
+            return
+
+        # After blank line (state=START), next line starts new block
+        if self.state == State.START:
+            starts_new_block = True
+        else:
+            starts_new_block = self._should_start_new_block(line_type, text)
+
+        if starts_new_block:
+            if not self.first_block:
+                yield "\0"
+            self.pending_nl = ""
+
+        if self.first_block:
+            self.first_block = False
+
+        yield self.pending_nl
+        yield text
+        self.pending_nl = trailing_nl
+
+        self._update_state(line_type, text)
+
+    def _should_start_new_block(self, line_type: LineType, text: str) -> bool:
+        """Check if this line should start a new block."""
+        if line_type == LineType.NOTE:
+            return True
+
+        if line_type == LineType.SUMMARY:
+            return True
+
+        if line_type == LineType.LOCATION:
+            current_location = extract_location_str(text)
+            assert current_location is not None
+            if self.state == State.NOTE_CONTEXT:
+                current_path = current_location.split(":")[0]
+                return self.note_path != current_path
+            return (
+                self.prev_location is not None
+                and current_location != self.prev_location
+            )
+
+        return False
+
+    def _update_state(self, line_type: LineType, text: str) -> None:
+        """Update state based on processed line."""
+        if line_type == LineType.NOTE:
+            self.state = State.NOTE_CONTEXT
+            self.note_path = text.split(":")[0]
+            self.prev_location = None
+        elif line_type == LineType.LOCATION:
+            current_location = extract_location_str(text)
+            assert current_location is not None
+            if self.state == State.NOTE_CONTEXT:
+                current_path = current_location.split(":")[0]
+                if self.note_path != current_path:
+                    self.state = State.NORMAL
+                    self.note_path = None
+            else:
+                self.state = State.NORMAL
+                self.note_path = None
+            self.prev_location = current_location
+        elif line_type == LineType.SUMMARY:
+            self.state = State.NORMAL
+            self.prev_location = None
+            self.note_path = None
+        elif self.state == State.START:
+            self.state = State.NORMAL
+
+    def _reset_state(self) -> None:
+        """Reset state to START."""
+        self.state = State.START
+        self.pending_nl = ""
+        self.prev_location = None
+        self.note_path = None
 
 
 def get_location(selection: str) -> FileLocation:

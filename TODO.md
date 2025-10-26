@@ -1,7 +1,6 @@
 # Tuick Task List
 
 - split_blocks now handles mypy fancy formats and ruff concise. Remaining:
-  - Reduce split_blocks complexity (11 > 10)
   - Fix ruff full format block splitting (summary line issues)
   - Fix pytest format block splitting (separator lines not creating new blocks)
 - Make select command not fail if no location is found, just be no-op.

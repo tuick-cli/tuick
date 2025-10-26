@@ -51,6 +51,7 @@ ignore = [
     "TD002",    # missing-todo-author
     "TD003",    # missing-todo-link
     "FIX",      # FIXME comments should not cause failure
+    "S101",     # Authorize assert
 
     # Rules that should be disabled when using ruff as a formatter.
     # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
