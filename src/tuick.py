@@ -14,7 +14,7 @@ import sys
 import typing
 
 if typing.TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
 
 import typer
 from rich.console import Console
@@ -111,39 +111,48 @@ def list_command(command: list[str]) -> None:
 
 
 def reload_command(command: list[str]) -> None:
-    """Run COMMAND, splitting output into blocks."""
-    blocks = run_and_split_blocks(command)
-    sys.stdout.write(blocks)
-
-
-def run_and_split_blocks(command: list[str]) -> str:
     """Run COMMAND with FORCE_COLOR=1 and split output into blocks."""
     env = os.environ.copy()
     env["FORCE_COLOR"] = "1"
     result = subprocess.run(
         command, capture_output=True, text=True, env=env, check=False
     )
-    return split_blocks(result.stdout)
+    lines = result.stdout.splitlines(keepends=True)
+    for chunk in split_blocks(lines):
+        sys.stdout.write(chunk)
 
 
-def split_blocks(text: str) -> str:
-    """Split text into NULL-separated blocks."""
-    iter_lines = text.splitlines(keepends=True)
-    result: list[str] = []
-    # If first line matches the LINE_REGEX, we are in line mode
-    if re.match(LINE_REGEX, text):
-        for line in iter_lines:
-            if result:
-                result.append("\0")
-            result.append(line.rstrip())
-    else:
-        # Handle Ruff full format, split on blank lines
-        for line in iter_lines:
-            if line == "\n":
-                result.append("\0")
-            else:
-                result.append(line)
-    return "".join(result)
+def split_blocks(lines: Iterable[str]) -> Iterator[str]:
+    r"""Split lines into NULL-separated blocks.
+
+    Args:
+        lines: Iterable of lines with line endings preserved
+
+    Yields:
+        Chunks of the \0-separated stream
+    """
+    first_block = True
+    pending_nl = ""
+    for line in lines:
+        text, trailing_nl = (
+            line.removesuffix("\n"),
+            "\n" if line.endswith("\n") else "",
+        )
+        if not text:
+            # Blank line
+            yield "\n\0"
+            first_block = False
+            pending_nl = ""
+            continue
+        if re.match(LINE_REGEX, text):
+            if not first_block:
+                yield "\0"
+            first_block = False
+            trailing_nl = ""
+        yield pending_nl
+        yield text
+        pending_nl = trailing_nl
+    yield pending_nl
 
 
 LINE_REGEX = re.compile(
@@ -154,7 +163,7 @@ LINE_REGEX = re.compile(
          (?::\d+:\d+)?  # Line and column of end
          :[ ].+         # Message
     """,
-    re.MULTILINE + re.VERBOSE,
+    re.VERBOSE,
 )
 RUFF_REGEX = re.compile(
     r"""^[ ]*-->[ ]  # Arrow marker, preceded by number column width padding
@@ -163,7 +172,7 @@ RUFF_REGEX = re.compile(
         :\d+         # Column number
         )$
     """,
-    re.MULTILINE + re.VERBOSE,
+    re.VERBOSE,
 )
 
 

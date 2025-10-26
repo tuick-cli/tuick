@@ -27,6 +27,12 @@ def make_env_capturer(
     return captured_env, capture_env
 
 
+def blocks_from_text(text: str) -> list[str]:
+    """Convert text to list of blocks using split_blocks."""
+    lines = text.splitlines(keepends=True)
+    return "".join(split_blocks(lines)).split("\0")
+
+
 MYPY_BLOCKS = [
     "src/jobsearch/search.py:58: error: Returning Any from function...",
     "tests/test_search.py:144: error: Non-overlapping equality check...",
@@ -109,8 +115,7 @@ Found 8 errors in 6 files (checked 20 source files)\
 def test_split_blocks_mypy(blocks: list[str]) -> None:
     """Test split_blocks on mypy output."""
     input_text = "\n".join(blocks) + "\n"
-    null_delimited = split_blocks(input_text)
-    assert null_delimited.split("\0") == blocks
+    assert blocks == blocks_from_text(input_text)
 
 
 RUFF_FULL_BLOCKS = [
@@ -178,8 +183,7 @@ Found 12 errors.
 def test_split_blocks_ruff(blocks: list[str]) -> None:
     """Test split_blocks on Ruff full output format."""
     input_text = "\n".join(blocks)
-    null_delimited = split_blocks(input_text)
-    assert null_delimited.split("\0") == blocks
+    assert blocks == blocks_from_text(input_text)
 
 
 PYTEST_AUTO_BLOCKS = [
@@ -299,8 +303,7 @@ FAILED tests/test_search.py::test_extract_search_card_no_salary - jobsearch....
 def test_split_blocks_pytest(blocks: list[str]) -> None:
     """Test split_blocks on Pytest auto traceback format."""
     input_text = "\n".join(blocks)
-    null_delimited = split_blocks(input_text)
-    assert null_delimited.split("\0") == blocks
+    assert blocks == blocks_from_text(input_text)
 
 
 def test_cli_default_launches_fzf() -> None:
