@@ -114,12 +114,16 @@ def reload_command(command: list[str]) -> None:
     """Run COMMAND with FORCE_COLOR=1 and split output into blocks."""
     env = os.environ.copy()
     env["FORCE_COLOR"] = "1"
-    result = subprocess.run(
-        command, capture_output=True, text=True, env=env, check=False
-    )
-    lines = result.stdout.splitlines(keepends=True)
-    for chunk in split_blocks(lines):
-        sys.stdout.write(chunk)
+    with subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+    ) as process:
+        if process.stdout:
+            for chunk in split_blocks(process.stdout):
+                sys.stdout.write(chunk)
 
 
 def split_blocks(lines: Iterable[str]) -> Iterator[str]:

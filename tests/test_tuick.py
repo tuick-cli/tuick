@@ -12,21 +12,6 @@ from tuick import app, split_blocks
 runner = CliRunner()
 
 
-def make_env_capturer(
-    stdout: str = "", returncode: int = 0
-) -> tuple[dict[str, str], Any]:
-    """Return env dict and callback that captures subprocess env."""
-    captured_env: dict[str, str] = {}
-
-    def capture_env(*args: Any, **kwargs: Any) -> CompletedProcess[str]:  # noqa: ANN401
-        captured_env.update(kwargs.get("env", {}))
-        return CompletedProcess(
-            args=[], returncode=returncode, stdout=stdout, stderr=""
-        )
-
-    return captured_env, capture_env
-
-
 def blocks_from_text(text: str) -> list[str]:
     """Convert text to list of blocks using split_blocks."""
     lines = text.splitlines(keepends=True)
@@ -308,7 +293,11 @@ def test_split_blocks_pytest(blocks: list[str]) -> None:
 
 def test_cli_default_launches_fzf() -> None:
     """Default command launches fzf with FZF_DEFAULT_COMMAND set."""
-    captured_env, capture_env = make_env_capturer()
+    captured_env: dict[str, str] = {}
+
+    def capture_env(*args: Any, **kwargs: Any) -> CompletedProcess[str]:  # noqa: ANN401
+        captured_env.update(kwargs.get("env", {}))
+        return CompletedProcess(args=[], returncode=0, stdout="", stderr="")
 
     with (
         patch("tuick.subprocess.run", side_effect=capture_env),
@@ -324,11 +313,17 @@ def test_cli_default_launches_fzf() -> None:
 
 def test_cli_reload_option() -> None:
     """--reload option runs command with FORCE_COLOR=1."""
-    captured_env, capture_env = make_env_capturer(
-        stdout="src/test.py:1: error: Test\n"
-    )
+    captured_env: dict[str, str] = {}
 
-    with patch("tuick.subprocess.run", side_effect=capture_env):
+    def mock_popen(*args: Any, **kwargs: Any) -> MagicMock:  # noqa: ANN401
+        captured_env.update(kwargs.get("env", {}))
+        mock_process = MagicMock()
+        mock_process.stdout = iter(["src/test.py:1: error: Test\n"])
+        mock_process.__enter__ = MagicMock(return_value=mock_process)
+        mock_process.__exit__ = MagicMock(return_value=False)
+        return mock_process
+
+    with patch("tuick.subprocess.Popen", side_effect=mock_popen):
         result = runner.invoke(app, ["--reload", "--", "mypy", "src/"])
         assert captured_env["FORCE_COLOR"] == "1"
         assert result.stdout == "src/test.py:1: error: Test"
