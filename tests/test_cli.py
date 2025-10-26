@@ -59,6 +59,39 @@ def test_cli_select_option() -> None:
         )
 
 
+def test_cli_select_prints_command() -> None:
+    """--select option prints shell-quoted editor command on success."""
+    with patch("tuick.cli.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        result = runner.invoke(
+            app, ["--select", "src/test.py:10:5: error: Test"]
+        )
+        assert result.exit_code == 0
+        assert result.stdout == "code --goto src/test.py:10:5\n"
+
+
+def test_cli_select_no_location_found() -> None:
+    """--select with no location prints message and exits 0 (no-op)."""
+    with patch("tuick.cli.subprocess.run") as mock_run:
+        result = runner.invoke(
+            app, ["--select", "plain text without location"]
+        )
+        assert result.exit_code == 0
+        assert result.stdout == "No location found\n"
+        # Verify editor was not called
+        mock_run.assert_not_called()
+
+
+def test_cli_select_verbose_no_location() -> None:
+    """--select --verbose with no location prints repr of input."""
+    with patch("tuick.cli.subprocess.run") as mock_run:
+        result = runner.invoke(app, ["--select", "plain text", "--verbose"])
+        assert result.exit_code == 0
+        assert result.stdout == "No location found\n'plain text'\n"
+        # Verify editor was not called
+        mock_run.assert_not_called()
+
+
 def test_cli_exclusive_options() -> None:
     """--reload and --select are mutually exclusive."""
     result = runner.invoke(

@@ -21,14 +21,12 @@ from tuick.parser import FileLocationNotFoundError, get_location, split_blocks
 
 app = typer.Typer()
 
+console = Console()
 err_console = Console(stderr=True)
 
 
 # ruff: noqa: S607 start-process-with-partial-path
-# Typer API uses boolean arguments, positional values, and function calls
-# in defaults
-# ruff: noqa: FBT001 boolean-type-hint-positional-argument
-# ruff: noqa: FBT003 boolean-positional-value-in-call
+# ruff: noqa: FBT001 FBT003 Typer API uses boolean arguments for flags
 # ruff: noqa: B008 function-call-in-default-argument
 
 # TODO: use watchexec to detect changes, and trigger fzf reload through socket
@@ -52,6 +50,9 @@ def main(
     select: str = typer.Option(
         "", "--select", help="Open editor at error location"
     ),
+    verbose: bool = typer.Option(
+        False, "-v", "--verbose", help="Show verbose output"
+    ),
 ) -> None:
     """Tuick: Text User Interface for Compilers and checKers."""
     if reload and select:
@@ -67,7 +68,7 @@ def main(
     if reload:
         reload_command(command)
     elif select:
-        select_command(select)
+        select_command(select, verbose=verbose)
     else:
         list_command(command)
 
@@ -127,13 +128,15 @@ def reload_command(command: list[str]) -> None:
                 sys.stdout.write(chunk)
 
 
-def select_command(selection: str) -> None:
+def select_command(selection: str, *, verbose: bool = False) -> None:
     """Display the selected error in the text editor."""
     try:
         location = get_location(selection)
-    except FileLocationNotFoundError as e:
-        err_console.print(e)
-        raise typer.Exit(1) from e
+    except FileLocationNotFoundError:
+        console.print("[yellow]No location found")
+        if verbose:
+            console.print(repr(selection))
+        return
 
     # Build destination string: "path:row" or "path:row:col"
     parts = [location.path]
@@ -144,6 +147,10 @@ def select_command(selection: str) -> None:
     destination = ":".join(parts)
 
     editor_command = ["code", "--goto", destination]
+    # Format command: first word bold white, rest cyan
+    quoted_parts = [shlex.quote(x) for x in editor_command]
+    formatted_command = f"{quoted_parts[0]} {' '.join(quoted_parts[1:])}"
+    console.print(formatted_command)
     result = subprocess.run(
         editor_command, check=False, capture_output=True, text=True
     )
