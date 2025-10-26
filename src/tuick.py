@@ -128,15 +128,22 @@ def run_and_split_blocks(command: list[str]) -> str:
 
 def split_blocks(text: str) -> str:
     """Split text into NULL-separated blocks."""
-    if not text:
-        return ""
+    iter_lines = text.splitlines(keepends=True)
+    result: list[str] = []
     # If first line matches the LINE_REGEX, we are in line mode
     if re.match(LINE_REGEX, text):
-        return text.rstrip().replace("\n", "\0")
-    # Handle Ruff full format, split on blank lines
-    return "".join(
-        "\0" if x == "\n" else x for x in text.splitlines(keepends=True)
-    )
+        for line in iter_lines:
+            if result:
+                result.append("\0")
+            result.append(line.rstrip())
+    else:
+        # Handle Ruff full format, split on blank lines
+        for line in iter_lines:
+            if line == "\n":
+                result.append("\0")
+            else:
+                result.append(line)
+    return "".join(result)
 
 
 LINE_REGEX = re.compile(

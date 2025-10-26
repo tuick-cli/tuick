@@ -1,7 +1,9 @@
 # Tuick Task List
 
+- Rewrite split_blocks to generator for incremental output.
 - Make all tests currently expected fail pass.
 - Make select command not fail if no url is found, just be no-op.
+- Make select command function with all formats tested with split_blocks.
 - Write failing test for iterator that yields whenever a filesystem change
   happen. Use a thread to make a change, and timeout of 0.1s. Test monitoring
   for creating file, modifying file, deleting file. Add watchdog
