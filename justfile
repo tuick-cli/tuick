@@ -8,11 +8,11 @@ help:
 # Install tuick using uv tool
 [group('user')]
 install:
-    uv tool install file://.
+    uv tool install --no-cache file://.
 
-# Development workflow: check, test, format
+# Development workflow: check, test
 [group('dev')]
-dev: compile check test format
+dev: compile check test
 
 # Agent workflow: check, test with minimal output
 [group('agent')]
@@ -22,8 +22,8 @@ agent: agent-compile agent-check agent-test
 # Clean generated files
 [group('dev')]
 clean:
-    rm -rf src/__pycache__ .mypy_cache .pytest_cache .ruff_cache \
-    .venv .vscode
+    rm -rf .dmypy.json .mypy_cache .pytest_cache .ruff_cache .venv \
+    .vscode */__pycache__ dist
     # hatch-mypyc, which gets invoked by "uv sync" leaves .so files in src
     rm -rf src/*.so
 

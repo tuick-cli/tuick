@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from tuick import app, split_blocks
+from tuick import FileLocation, app, get_location, split_blocks
 
 runner = CliRunner()
 
@@ -289,6 +289,20 @@ def test_split_blocks_pytest(blocks: list[str]) -> None:
     """Test split_blocks on Pytest auto traceback format."""
     input_text = "\n".join(blocks)
     assert blocks == blocks_from_text(input_text)
+
+
+def test_get_location_mypy() -> None:
+    """Extract location from mypy line format."""
+    assert FileLocation(
+        path="src/jobsearch/search.py", row=58, column=None
+    ) == get_location(MYPY_BLOCKS[0])
+
+
+def test_get_location_ruff() -> None:
+    """Extract location from ruff full format."""
+    assert FileLocation(
+        path="src/jobsearch/search_cli.py", row=8, column=1
+    ) == get_location(RUFF_FULL_BLOCKS[0])
 
 
 def test_cli_default_launches_fzf() -> None:

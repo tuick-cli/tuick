@@ -12,6 +12,7 @@ import shlex
 import subprocess
 import sys
 import typing
+from dataclasses import dataclass
 
 if typing.TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -22,6 +23,32 @@ from rich.console import Console
 app = typer.Typer()
 
 err_console = Console(stderr=True)
+
+
+@dataclass
+class FileLocation:
+    """File location with optional row and column."""
+
+    path: str
+    row: int | None = None
+    column: int | None = None
+
+
+class FileLocationNotFoundError(ValueError):
+    """Error when location pattern not found in selection."""
+
+    def __init__(self, selection: str) -> None:
+        """Initialize with the selection text."""
+        self.selection = selection
+        super().__init__(f"Location pattern not found in: {selection!r}")
+
+    def __rich__(self) -> str:
+        """Rich formatted error message."""
+        return (
+            f"[bold red]Error:[/] Location pattern not found\n"
+            f"[bold]Input:[/] {self.selection!r}"
+        )
+
 
 # ruff: noqa: S607 start-process-with-partial-path
 # Typer API uses boolean arguments, positional values, and function calls
@@ -167,7 +194,7 @@ LINE_REGEX = re.compile(
          (?::\d+:\d+)?  # Line and column of end
          :[ ].+         # Message
     """,
-    re.VERBOSE,
+    re.MULTILINE + re.VERBOSE,
 )
 RUFF_REGEX = re.compile(
     r"""^[ ]*-->[ ]  # Arrow marker, preceded by number column width padding
@@ -176,20 +203,53 @@ RUFF_REGEX = re.compile(
         :\d+         # Column number
         )$
     """,
-    re.VERBOSE,
+    re.MULTILINE + re.VERBOSE,
 )
+
+
+def get_location(selection: str) -> FileLocation:
+    """Extract file location from error message selection.
+
+    Args:
+        selection: Error message text (line or block format)
+
+    Returns:
+        FileLocation with path, row, and optional column
+
+    Raises:
+        FileLocationNotFoundError: If location pattern not found
+    """
+    regex = RUFF_REGEX if "\n" in selection else LINE_REGEX
+    match = re.search(regex, selection)
+    if match is None:
+        raise FileLocationNotFoundError(selection)
+
+    # Parse "path:row" or "path:row:col"
+    location_str = match.group(1)
+    parts = location_str.split(":")
+    path = parts[0]
+    row = int(parts[1]) if len(parts) > 1 else None
+    column = int(parts[2]) if len(parts) > 2 else None
+
+    return FileLocation(path=path, row=row, column=column)
 
 
 def select_command(selection: str) -> None:
     """Display the selected error in the text editor."""
-    regex = RUFF_REGEX if "\n" in selection else LINE_REGEX
-    match = re.search(regex, selection)
-    if match is None:
-        pattern = {LINE_REGEX: "line", RUFF_REGEX: "ruff"}[regex]
-        err_console.print("[bold red]Line pattern not found:", pattern)
-        err_console.print("[bold]Input:", repr(selection))
-        raise typer.Exit(1)
-    destination = match.group(1)
+    try:
+        location = get_location(selection)
+    except FileLocationNotFoundError as e:
+        err_console.print(e)
+        raise typer.Exit(1) from e
+
+    # Build destination string: "path:row" or "path:row:col"
+    parts = [location.path]
+    if location.row is not None:
+        parts.append(str(location.row))
+        if location.column is not None:
+            parts.append(str(location.column))
+    destination = ":".join(parts)
+
     editor_command = ["code", "--goto", destination]
     result = subprocess.run(
         editor_command, check=False, capture_output=True, text=True
