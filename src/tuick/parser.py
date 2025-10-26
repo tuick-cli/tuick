@@ -19,6 +19,7 @@ class State(Enum):
     START = auto()
     NORMAL = auto()
     NOTE_CONTEXT = auto()
+    SUMMARY = auto()
 
 
 class LineType(Enum):
@@ -76,6 +77,7 @@ MYPY_NOTE_REGEX = re.compile(
 )
 SUMMARY_REGEX = re.compile(
     r"""^Found[ ]\d+[ ]error  # Summary line like "Found 12 errors"
+        #|^={3,} .+? ={3,}$    # === summary ===
     """,
     re.VERBOSE,
 )
@@ -103,7 +105,7 @@ def classify_line(text: str) -> LineType:
         return LineType.NOTE
     if re.match(LINE_REGEX, text):
         return LineType.LOCATION
-    if re.match(SUMMARY_REGEX, text) or re.match(PYTEST_SEP_REGEX, text):
+    if re.match(SUMMARY_REGEX, text):
         return LineType.SUMMARY
     return LineType.OTHER
 
@@ -140,6 +142,7 @@ class BlockSplitter:
         line_type = classify_line(text)
 
         if line_type == LineType.BLANK:
+            yield self.pending_nl
             self._reset_state()
             return
 
@@ -168,7 +171,7 @@ class BlockSplitter:
         if line_type == LineType.NOTE:
             return True
 
-        if line_type == LineType.SUMMARY:
+        if line_type == LineType.SUMMARY and self.state != State.SUMMARY:
             return True
 
         if line_type == LineType.LOCATION:
@@ -203,7 +206,7 @@ class BlockSplitter:
                 self.note_path = None
             self.prev_location = current_location
         elif line_type == LineType.SUMMARY:
-            self.state = State.NORMAL
+            self.state = State.SUMMARY
             self.prev_location = None
             self.note_path = None
         elif self.state == State.START:

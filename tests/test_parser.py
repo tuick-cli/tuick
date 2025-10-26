@@ -36,8 +36,7 @@ src/jobsearch/cadremploi_scraper.py: note: In function "parse_job_posting":
 src/jobsearch/cadremploi_scraper.py:65:32: error: Missing type parameters fo...
 "dict"  [type-arg]
     def parse_job_posting(json_ld: dict, url: str) -> dict:
-                                   ^\
-""",
+                                   ^""",
 ]
 
 # uv run --no-sync mypy --show-absolute-path
@@ -76,8 +75,7 @@ tests/test_search.py:142:12:142:23: error: Non-overlapping equality check (l...
 tests/test_search.py:142:12:142:23: note: See https://mypy.rtfd.io/en/stabl...\
 """,
     """\
-Found 8 errors in 6 files (checked 20 source files)\
-""",
+Found 8 errors in 6 files (checked 20 source files)""",
 ]
 
 
@@ -92,7 +90,7 @@ Found 8 errors in 6 files (checked 20 source files)\
 )
 def test_split_blocks_mypy(blocks: list[str]) -> None:
     """Test split_blocks on mypy output."""
-    input_text = "\n".join(blocks) + "\n"
+    input_text = "\n".join((*blocks, ""))
     assert blocks == blocks_from_text(input_text)
 
 
@@ -133,11 +131,10 @@ PT015 Assertion always fails, replace with `pytest.fail()`
 134 |     assert False
     |     ^^^^^^^^^^^^
     |
-"""
+""",
     """\
 Found 12 errors.
-[*] 3 fixable with the `--fix` option (...).
-""",
+[*] 3 fixable with the `--fix` option (...).""",
 ]
 
 RUFF_CONCISE_BLOCKS = [
@@ -146,21 +143,17 @@ RUFF_CONCISE_BLOCKS = [
     "src/tui_checker.py:1:1: D100 Missing docstring in public module",
     """\
 Found 12 errors.
-[*] 3 fixable with the `--fix` option (4 hidden fixes can be enabled with th...
-""",
+[*] 3 fixable with the `--fix` option (4 hidden fixes can be enabled wit...""",
 ]
 
 
 @pytest.mark.parametrize(
     "blocks",
-    [
-        RUFF_FULL_BLOCKS,
-        pytest.param(RUFF_CONCISE_BLOCKS, marks=pytest.mark.xfail),
-    ],
+    [RUFF_FULL_BLOCKS, RUFF_CONCISE_BLOCKS],
 )
 def test_split_blocks_ruff(blocks: list[str]) -> None:
     """Test split_blocks on Ruff full output format."""
-    input_text = "\n".join(blocks)
+    input_text = "\n".join((*blocks, ""))
     assert blocks == blocks_from_text(input_text)
 
 
@@ -214,8 +207,7 @@ src/jobsearch/search.py:68: SelectorNotFoundError""",
 =========================== short test summary info ===========================
 FAILED tests/test_search.py::test_extract_search_card - ValueError
 FAILED tests/test_search.py::test_extract_search_card_no_salary - jobsearch....
-========================= 2 failed, 32 passed in 4.97s ========================
-""",
+========================= 2 failed, 32 passed in 4.97s ====================""",
 ]
 
 # Pytest --tb=long output is a subset of auto, no need to test separately
@@ -250,8 +242,7 @@ E   jobsearch.search.SelectorNotFoundError: Not found: h3 + div > div:nth-c""",
 =========================== short test summary info ===========================
 FAILED tests/test_search.py::test_extract_search_card - ValueError
 FAILED tests/test_search.py::test_extract_search_card_no_salary - jobsearch....
-========================= 2 failed, 32 passed in 4.99s ========================
-""",
+========================= 2 failed, 32 passed in 4.99s ====================""",
 ]
 
 
@@ -269,8 +260,7 @@ tests/test_wait_for_load.py ..                                           [100%]
 =========================== short test summary info ===========================
 FAILED tests/test_search.py::test_extract_search_card - ValueError
 FAILED tests/test_search.py::test_extract_search_card_no_salary - jobsearch....
-========================= 2 failed, 32 passed in 4.93s ========================
-""",
+========================= 2 failed, 32 passed in 4.93s ====================""",
 ]
 
 
@@ -280,7 +270,7 @@ FAILED tests/test_search.py::test_extract_search_card_no_salary - jobsearch....
 )
 def test_split_blocks_pytest(blocks: list[str]) -> None:
     """Test split_blocks on Pytest auto traceback format."""
-    input_text = "\n".join(blocks)
+    input_text = "\n".join((*blocks, ""))
     assert blocks == blocks_from_text(input_text)
 
 
