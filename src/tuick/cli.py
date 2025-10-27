@@ -20,6 +20,11 @@ if typing.TYPE_CHECKING:
 import typer
 from rich.console import Console
 
+from tuick.editor import (
+    UnsupportedEditorError,
+    get_editor_command,
+    get_editor_from_env,
+)
 from tuick.monitor import MonitorThread
 from tuick.parser import FileLocationNotFoundError, get_location, split_blocks
 
@@ -152,19 +157,28 @@ def select_command(selection: str, *, verbose: bool = False) -> None:
             console.print(repr(selection))
         return
 
-    # Build destination string: "path:row" or "path:row:col"
-    parts = [location.path]
-    if location.row is not None:
-        parts.append(str(location.row))
-        if location.column is not None:
-            parts.append(str(location.column))
-    destination = ":".join(parts)
+    # Get editor from environment
+    editor = get_editor_from_env()
+    if editor is None:
+        err_console.print(
+            "[bold red]Error:[/] No editor configured. "
+            "Set EDITOR or VISUAL environment variable."
+        )
+        raise typer.Exit(1)
 
-    editor_command = ["code", "--goto", destination]
-    # Format command: first word bold white, rest cyan
+    # Build editor command
+    try:
+        editor_command = get_editor_command(editor, location)
+    except UnsupportedEditorError as e:
+        err_console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1) from None
+
+    # Format and print command
     quoted_parts = [shlex.quote(x) for x in editor_command]
     formatted_command = f"{quoted_parts[0]} {' '.join(quoted_parts[1:])}"
     console.print(formatted_command)
+
+    # Execute command
     result = subprocess.run(
         editor_command, check=False, capture_output=True, text=True
     )

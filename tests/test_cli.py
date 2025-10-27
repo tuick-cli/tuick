@@ -58,24 +58,20 @@ def test_cli_reload_option() -> None:
 
 
 def test_cli_select_option() -> None:
-    """--select option opens editor at location."""
-    with patch("tuick.cli.subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
-        runner.invoke(app, ["--select", "src/test.py:10:5: error: Test"])
-        assert mock_run.call_args[0] == (
-            ["code", "--goto", "src/test.py:10:5"],
-        )
-
-
-def test_cli_select_prints_command() -> None:
-    """--select option prints shell-quoted editor command on success."""
-    with patch("tuick.cli.subprocess.run") as mock_run:
+    """--select option opens editor at location and prints command."""
+    with (
+        patch("tuick.cli.subprocess.run") as mock_run,
+        patch("tuick.cli.get_editor_from_env", return_value="vi"),
+    ):
         mock_run.return_value = MagicMock(returncode=0, stderr="")
         result = runner.invoke(
             app, ["--select", "src/test.py:10:5: error: Test"]
         )
         assert result.exit_code == 0
-        assert result.stdout == "code --goto src/test.py:10:5\n"
+        assert result.stdout == "vi +10 '+normal! 5l' src/test.py\n"
+        assert mock_run.call_args[0] == (
+            ["vi", "+10", "+normal! 5l", "src/test.py"],
+        )
 
 
 def test_cli_select_no_location_found() -> None:
