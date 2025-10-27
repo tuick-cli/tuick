@@ -1,9 +1,5 @@
 # Tuick Task List
 
-- Write a failing test for line-based communication through a unix socket, with
-  commands run by fzf. Parent process listen, subprocesses write, parent must
-  receive message, fail if message was not received after subcommand completed.
-  Do not use subprocesses, test through typer to keep test fast.
 - Write failing test (patching subprocess) for FZF_PORT setup and HTTP
   communication using a local http server, verifying that the appropriate
   reload command is sent when a file is created. Green, create unix socket in
