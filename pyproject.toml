@@ -9,6 +9,7 @@ authors = [
 ]
 
 dependencies = [
+    "requests-unixsocket>=0.4.1",
     "rich>=14.2.0",
     "typer>=0.20.0",
 ]

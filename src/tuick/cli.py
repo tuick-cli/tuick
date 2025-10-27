@@ -5,11 +5,14 @@ text editor to provide fluid, keyboard-friendly, access to code error
 locations.
 """
 
+import contextlib
 import os
 import shlex
 import subprocess
 import sys
+import tempfile
 import typing
+from pathlib import Path
 
 if typing.TYPE_CHECKING:
     from collections.abc import Iterable
@@ -17,6 +20,7 @@ if typing.TYPE_CHECKING:
 import typer
 from rich.console import Console
 
+from tuick.monitor import MonitorThread
 from tuick.parser import FileLocationNotFoundError, get_location, split_blocks
 
 app = typer.Typer()
@@ -80,36 +84,46 @@ def list_command(command: list[str]) -> None:
     select_cmd = quote_command([myself, "--select"])
     env = os.environ.copy()
     env["FZF_DEFAULT_COMMAND"] = reload_cmd
-    result = subprocess.run(
-        [
-            "fzf",
-            "--read0",
-            "--ansi",
-            "--no-sort",
-            "--reverse",
-            "--disabled",
-            "--color=dark",
-            "--highlight-line",
-            "--wrap",
-            "--no-input",
-            "--bind",
-            ",".join(
-                [
-                    f"enter,right:execute({select_cmd} {{}})",
-                    f"r:reload({reload_cmd})",
-                    "q:abort",
-                    "space:down",
-                    "backspace:up",
-                ]
-            ),
-        ],
-        env=env,
-        text=True,
-        check=False,
-    )
-    if result.returncode not in [0, 130]:
-        # 130 means fzf was aborted with ctrl-C or ESC
-        sys.exit(result.returncode)
+
+    with contextlib.ExitStack() as stack:
+        tmpdir = stack.enter_context(tempfile.TemporaryDirectory())
+        socket_path = Path(tmpdir) / "fzf.sock"
+
+        monitor = MonitorThread(socket_path, reload_cmd)
+        monitor.start()
+        stack.callback(monitor.stop)
+
+        result = subprocess.run(
+            [
+                "fzf",
+                f"--listen={socket_path}",
+                "--read0",
+                "--ansi",
+                "--no-sort",
+                "--reverse",
+                "--disabled",
+                "--color=dark",
+                "--highlight-line",
+                "--wrap",
+                "--no-input",
+                "--bind",
+                ",".join(
+                    [
+                        f"enter,right:execute({select_cmd} {{}})",
+                        f"r:reload({reload_cmd})",
+                        "q:abort",
+                        "space:down",
+                        "backspace:up",
+                    ]
+                ),
+            ],
+            env=env,
+            text=True,
+            check=False,
+        )
+        if result.returncode not in [0, 130]:
+            # 130 means fzf was aborted with ctrl-C or ESC
+            sys.exit(result.returncode)
 
 
 def reload_command(command: list[str]) -> None:

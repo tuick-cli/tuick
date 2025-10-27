@@ -2,9 +2,13 @@
 
 import subprocess
 import sys
+import threading
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import requests_unixsocket  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -94,3 +98,51 @@ class FilesystemMonitor:
         """Send SIGTERM to the subprocess and wait for it to terminate."""
         self._proc.terminate()
         self._proc.wait()
+
+
+class MonitorThread:
+    """Thread that monitors filesystem and sends reload commands via HTTP."""
+
+    def __init__(
+        self,
+        socket_path: Path,
+        reload_cmd: str,
+        *,
+        path: Path | None = None,
+        testing: bool = False,
+    ) -> None:
+        """Initialize monitor thread."""
+        self.path = path if path is not None else Path.cwd()
+        self.socket_path = socket_path
+        self.reload_cmd = reload_cmd
+        self.testing = testing
+        self._monitor: FilesystemMonitor | None = None
+        self._thread: threading.Thread | None = None
+        self._session = requests_unixsocket.Session()
+
+    def start(self) -> None:
+        """Start monitoring thread."""
+        self._monitor = FilesystemMonitor(self.path, testing=self.testing)
+        self._monitor.sync()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        """Monitor filesystem and send reload commands."""
+        assert self._monitor is not None
+        for _event in self._monitor.iter_changes():
+            self._send_reload()
+
+    def _send_reload(self) -> None:
+        """Send reload command via HTTP POST to Unix socket."""
+        quoted_path = urllib.parse.quote(str(self.socket_path), safe="")
+        socket_url = f"http+unix://{quoted_path}"
+        body = f"reload('{self.reload_cmd}')"
+        self._session.post(socket_url, data=body)
+
+    def stop(self) -> None:
+        """Stop monitoring thread."""
+        if self._monitor:
+            self._monitor.stop()
+        if self._thread:
+            self._thread.join(timeout=1.0)

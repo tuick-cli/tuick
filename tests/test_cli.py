@@ -12,16 +12,19 @@ runner = CliRunner()
 
 
 def test_cli_default_launches_fzf() -> None:
-    """Default command launches fzf with FZF_DEFAULT_COMMAND set."""
+    """Default command launches fzf with --listen socket argument."""
     captured_env: dict[str, str] = {}
+    captured_args: list[Any] = []
 
-    def capture_env(*args: Any, **kwargs: Any) -> CompletedProcess[str]:  # noqa: ANN401
+    def capture_call(*args: Any, **kwargs: Any) -> CompletedProcess[str]:  # noqa: ANN401
         captured_env.update(kwargs.get("env", {}))
+        captured_args.extend(args)
         return CompletedProcess(args=[], returncode=0, stdout="", stderr="")
 
     with (
-        patch("tuick.cli.subprocess.run", side_effect=capture_env),
+        patch("tuick.cli.subprocess.run", side_effect=capture_call),
         patch("tuick.cli.sys.argv", ["tuick", "ruff"]),
+        patch("tuick.cli.MonitorThread"),
     ):
         runner.invoke(app, ["--", "ruff", "check", "src/"])
         assert "FZF_DEFAULT_COMMAND" in captured_env
@@ -29,6 +32,11 @@ def test_cli_default_launches_fzf() -> None:
             "tuick --reload -- ruff check src/"
             in captured_env["FZF_DEFAULT_COMMAND"]
         )
+        fzf_args = captured_args[0]
+        listen_arg = [arg for arg in fzf_args if arg.startswith("--listen=")]
+        assert len(listen_arg) == 1
+        socket_path = listen_arg[0].removeprefix("--listen=")
+        assert socket_path.endswith(".sock")
 
 
 def test_cli_reload_option() -> None:
