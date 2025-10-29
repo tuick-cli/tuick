@@ -88,6 +88,7 @@ def list_command(command: list[str], *, verbose: bool = False) -> None:
     select_cmd = quote_command([myself, "--select", *verbose_flag])
     env = os.environ.copy()
     env["FZF_DEFAULT_COMMAND"] = reload_cmd
+    header = quote_command(command)
 
     with contextlib.ExitStack() as stack:
         tmpdir = stack.enter_context(tempfile.TemporaryDirectory())
@@ -109,10 +110,13 @@ def list_command(command: list[str], *, verbose: bool = False) -> None:
             "--highlight-line",
             "--wrap",
             "--no-input",
+            "--header-border",
             "--track",
             "--bind",
             ",".join(
                 [
+                    f"start:change-header({header} ... Running)",
+                    f"load:change-header({header})",
                     f"enter,right:execute({select_cmd} {{}})",
                     f"r:reload({reload_cmd})",
                     "q:abort",
