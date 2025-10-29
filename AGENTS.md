@@ -52,6 +52,15 @@
   - Instead assert a single comparison for the whole structure
   - If some items must be ignored in the comparison, build a dict for the
     comparison, omitting those items.
+- testsync: Multithreaded tests must use proper synchronization.
+  - testawake: `time.sleep()` is *strictly forbidden* in tests.
+  - fastgreen: Never block on the green path. The execution of a
+    successful test must never block on a timeout.
+  - The green execution path can move from one thread to another through
+    blocking synchronization.
+  - After teardown of a successful test, all created threads and processes must
+    be joined.
+  - Blocking on a timeout in test and teardown is allowed for failing tests.
 
 ### Environment and Tooling
 
