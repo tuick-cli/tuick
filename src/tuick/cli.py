@@ -119,6 +119,7 @@ def list_command(command: list[str]) -> None:
                         "q:abort",
                         "space:down",
                         "backspace:up",
+                        "zero:abort",
                     ]
                 ),
             ],
