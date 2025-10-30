@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -312,10 +313,10 @@ class TestEditorURL:
         """print_to() displays 'open {url}'."""
         url = "vscode://file//project/src/test.py:10:5"
         cmd = EditorURL(url)
-        console = Console()
-        with console.capture() as capture:
-            cmd.print_to(console)
-        assert capture.get() == f"open {url}\n"
+        output = StringIO()
+        console = Console(file=output, force_terminal=False)
+        cmd.print_to(console)
+        assert output.getvalue() == f"open {url}\n"
 
     @pytest.mark.parametrize(
         ("system", "expected_command"),
@@ -357,20 +358,20 @@ class TestEditorSubprocess:
         """print_to() displays shell-quoted command args."""
         args = ["vim", "+10", "src/test.py"]
         cmd = EditorSubprocess(args)
-        console = Console()
-        with console.capture() as capture:
-            cmd.print_to(console)
-        assert capture.get() == "vim +10 src/test.py\n"
+        output = StringIO()
+        console = Console(file=output, force_terminal=False)
+        cmd.print_to(console)
+        assert output.getvalue() == "vim +10 src/test.py\n"
 
     def test_print_to_shell_quotes_spaces(self) -> None:
         """print_to() correctly shell quotes args with spaces."""
         args = ["/usr/bin/my editor", "--arg", "file with spaces.py"]
         cmd = EditorSubprocess(args)
-        console = Console()
-        with console.capture() as capture:
-            cmd.print_to(console)
+        output = StringIO()
+        console = Console(file=output, force_terminal=False)
+        cmd.print_to(console)
         expected = "'/usr/bin/my editor' --arg 'file with spaces.py'\n"
-        assert capture.get() == expected
+        assert output.getvalue() == expected
 
     def test_run_calls_subprocess_without_capture(self) -> None:
         """Run() calls subprocess.run without capture_output."""

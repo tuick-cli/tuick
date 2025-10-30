@@ -1,5 +1,7 @@
 # Tuick Task List
 
+- Use rich protocol instead of print_to method for editor output
+
 - Open a unix socket in the top process, set env TUICK_SOCKET, so reload
   process (--reload) can connect. Simple line based protocol. Currently only
   message is "reload", to notify that a reload was initiated either by the user

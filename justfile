@@ -1,5 +1,7 @@
 # Tuicker project commands
 
+export FORCE_COLOR := '1'
+
 # Display available recipes
 [group('user')]
 help:

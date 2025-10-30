@@ -1,14 +1,27 @@
 """Tests for the CLI module."""
 
+import os
 import subprocess
+from io import StringIO
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+from rich.console import Console
 from typer.testing import CliRunner
 
 from tuick.cli import app
 
 runner = CliRunner()
+
+
+@pytest.fixture
+def console_out():
+    """Patch console with test console using StringIO (no colors)."""
+    output = StringIO()
+    test_console = Console(file=output, force_terminal=False)
+    with patch("tuick.cli.console", test_console):
+        yield output
 
 
 def track(seq: list[str], action: str, ret: Any = None):  # noqa: ANN401
@@ -113,7 +126,7 @@ def test_cli_reload_option() -> None:
         assert result.stdout == "src/test.py:1: error: Test"
 
 
-def test_cli_select_option() -> None:
+def test_cli_select_option(console_out: StringIO) -> None:
     """--select option opens editor at location and prints command."""
     with (
         patch("tuick.cli.subprocess.run") as mock_run,
@@ -124,30 +137,30 @@ def test_cli_select_option() -> None:
             app, ["--verbose", "--select", "src/test.py:10:5: error: Test"]
         )
         assert result.exit_code == 0
-        assert result.stdout == "vi +10 '+normal! 5l' src/test.py\n"
+        assert console_out.getvalue() == "vi +10 '+normal! 5l' src/test.py\n"
         assert mock_run.call_args[0] == (
             ["vi", "+10", "+normal! 5l", "src/test.py"],
         )
 
 
-def test_cli_select_no_location_found() -> None:
+def test_cli_select_no_location_found(console_out: StringIO) -> None:
     """--select with no location prints message and exits 0 (no-op)."""
     with patch("tuick.cli.subprocess.run") as mock_run:
         result = runner.invoke(
             app, ["--select", "plain text without location"]
         )
         assert result.exit_code == 0
-        assert result.stdout == "No location found\n"
+        assert console_out.getvalue() == "No location found\n"
         # Verify editor was not called
         mock_run.assert_not_called()
 
 
-def test_cli_select_verbose_no_location() -> None:
+def test_cli_select_verbose_no_location(console_out: StringIO) -> None:
     """--select --verbose with no location prints repr of input."""
     with patch("tuick.cli.subprocess.run") as mock_run:
         result = runner.invoke(app, ["--select", "plain text", "--verbose"])
         assert result.exit_code == 0
-        assert result.stdout == "No location found\n'plain text'\n"
+        assert console_out.getvalue() == "No location found\n'plain text'\n"
         # Verify editor was not called
         mock_run.assert_not_called()
 
