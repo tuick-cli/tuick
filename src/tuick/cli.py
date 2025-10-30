@@ -86,8 +86,6 @@ def list_command(command: list[str], *, verbose: bool = False) -> None:
         [myself, "--reload", *verbose_flag, "--", *command]
     )
     select_cmd = quote_command([myself, "--select", *verbose_flag])
-    env = os.environ.copy()
-    env["FZF_DEFAULT_COMMAND"] = reload_cmd
     header = quote_command(command)
 
     with contextlib.ExitStack() as stack:
@@ -98,58 +96,93 @@ def list_command(command: list[str], *, verbose: bool = False) -> None:
         monitor.start()
         stack.callback(monitor.stop)
 
-        fzf_cmd = [
-            "fzf",
-            f"--listen={socket_path}",
-            "--read0",
-            "--ansi",
-            "--no-sort",
-            "--reverse",
-            "--disabled",
-            "--color=dark",
-            "--highlight-line",
-            "--wrap",
-            "--no-input",
-            "--header-border",
-            "--track",
-            "--bind",
-            ",".join(
-                [
-                    f"start:change-header({header} ... Running)",
-                    f"load:change-header({header})",
-                    f"enter,right:execute({select_cmd} {{}})",
-                    f"r:reload({reload_cmd})",
-                    "q:abort",
-                    "space:down",
-                    "backspace:up",
-                    "zero:abort",
-                ]
-            ),
-        ]
+        # Run command and stream to fzf stdin
+        env = os.environ.copy()
+        env["FORCE_COLOR"] = "1"
 
-        if verbose:
-            console.print(f"[dim]$ {quote_command(fzf_cmd)}[/]")
-
-        result = subprocess.run(
-            fzf_cmd,
-            env=env,
+        with subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            check=False,
-        )
+            env=env,
+        ) as cmd_proc:
+            if cmd_proc.stdout is None:
+                return
 
-        if verbose:
-            if result.returncode == 0:
-                console.print("[dim]fzf exited normally (0)[/]")
-            elif result.returncode == 130:
-                console.print("[dim]fzf aborted by user (130)[/]")
-            else:
-                console.print(
-                    f"[yellow]fzf exited with status {result.returncode}[/]"
-                )
+            # Read first chunk to check if there's any output
+            chunks = split_blocks(cmd_proc.stdout)
+            first_chunk = None
+            try:
+                first_chunk = next(chunks)
+            except StopIteration:
+                # No output, don't start fzf
+                return
 
-        if result.returncode not in [0, 130]:
-            # 130 means fzf was aborted with ctrl-C or ESC
-            sys.exit(result.returncode)
+            # Have output, start fzf
+            fzf_cmd = [
+                "fzf",
+                f"--listen={socket_path}",
+                "--read0",
+                "--ansi",
+                "--no-sort",
+                "--reverse",
+                "--disabled",
+                "--color=dark",
+                "--highlight-line",
+                "--wrap",
+                "--no-input",
+                "--header-border",
+                "--track",
+                "--bind",
+                ",".join(
+                    [
+                        f"start:change-header({header})",
+                        f"load:change-header({header})",
+                        f"enter,right:execute({select_cmd} {{}})",
+                        f"r:reload({reload_cmd})",
+                        "q:abort",
+                        "space:down",
+                        "backspace:up",
+                        "zero:abort",
+                    ]
+                ),
+            ]
+
+            if verbose:
+                console.print(f"[dim]$ {quote_command(fzf_cmd)}[/]")
+
+            with subprocess.Popen(
+                fzf_cmd,
+                stdin=subprocess.PIPE,
+                text=True,
+            ) as fzf_proc:
+                if fzf_proc.stdin is None:
+                    return
+
+                # Write first chunk
+                fzf_proc.stdin.write(first_chunk)
+
+                # Stream remaining chunks
+                for chunk in chunks:
+                    fzf_proc.stdin.write(chunk)
+
+                fzf_proc.stdin.close()
+
+            if verbose:
+                if fzf_proc.returncode == 0:
+                    console.print("[dim]fzf exited normally (0)[/]")
+                elif fzf_proc.returncode == 130:
+                    console.print("[dim]fzf aborted by user (130)[/]")
+                else:
+                    console.print(
+                        f"[yellow]fzf exited with "
+                        f"status {fzf_proc.returncode}[/]"
+                    )
+
+            if fzf_proc.returncode not in [0, 130, None]:
+                # 130 means fzf was aborted with ctrl-C or ESC
+                sys.exit(fzf_proc.returncode)
 
 
 def reload_command(command: list[str]) -> None:

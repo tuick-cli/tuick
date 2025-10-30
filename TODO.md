@@ -1,8 +1,5 @@
 # Tuick Task List
 
-- Stop using FZF_DEFAULT_COMMAND and only start fzf if there is output to
-  display. Feed null-separated data to fzf stdin.
-
 - Open a unix socket in the top process, set env TUICK_SOCKET, so reload
   process (--reload) can connect. Simple line based protocol. Currently only
   message is "reload", to notify that a reload was initiated either by the user

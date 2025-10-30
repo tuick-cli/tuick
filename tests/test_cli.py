@@ -1,6 +1,6 @@
 """Tests for the CLI module."""
 
-from subprocess import CompletedProcess
+import subprocess
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -11,32 +11,88 @@ from tuick.cli import app
 runner = CliRunner()
 
 
-def test_cli_default_launches_fzf() -> None:
-    """Default command launches fzf with --listen socket argument."""
-    captured_env: dict[str, str] = {}
-    captured_args: list[Any] = []
+def track(seq: list[str], action: str, ret: Any = None):  # noqa: ANN401
+    """Append action to sequence, return value."""
+    return lambda *a: (seq.append(action), ret)[1]  # type: ignore[func-returns-value]
 
-    def capture_call(*args: Any, **kwargs: Any) -> CompletedProcess[str]:  # noqa: ANN401
-        captured_env.update(kwargs.get("env", {}))
-        captured_args.extend(args)
-        return CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+def test_cli_default_launches_fzf() -> None:
+    """Default command streams data incrementally to fzf stdin."""
+    sequence: list[str] = []
+
+    def cmd_stdout():
+        for line in ["test.py:1: error\n", "test.py:2: warning\n"]:
+            sequence.append(f"read:{line.strip()}")
+            yield line
+        sequence.append("stopiteration")
+
+    cmd_proc = MagicMock(returncode=0, stdout=cmd_stdout())  # type: ignore[no-untyped-call]
+    cmd_proc.__enter__.side_effect = track(
+        sequence, "command:enter", ret=cmd_proc
+    )
+    cmd_proc.__exit__.side_effect = track(sequence, "command:exit", ret=False)
+
+    fzf_proc = MagicMock(returncode=0)
+    fzf_proc.__enter__.side_effect = track(sequence, "fzf:enter", ret=fzf_proc)
+    fzf_proc.__exit__.side_effect = track(sequence, "fzf:exit", ret=False)
+    fzf_proc.stdin.write.side_effect = lambda d: (
+        sequence.append(f"write:{d!r}"),  # type: ignore[func-returns-value]
+        None,
+    )[1]
+    fzf_proc.stdin.close.side_effect = track(sequence, "close")
 
     with (
-        patch("tuick.cli.subprocess.run", side_effect=capture_call),
-        patch("tuick.cli.sys.argv", ["tuick", "ruff"]),
+        patch(
+            "tuick.cli.subprocess.Popen",
+            autospec=True,
+            side_effect=[cmd_proc, fzf_proc],
+        ) as popen_mock,
         patch("tuick.cli.MonitorThread"),
     ):
         runner.invoke(app, ["--", "ruff", "check", "src/"])
-        assert "FZF_DEFAULT_COMMAND" in captured_env
-        assert (
-            "tuick --reload -- ruff check src/"
-            in captured_env["FZF_DEFAULT_COMMAND"]
-        )
-        fzf_args = captured_args[0]
-        listen_arg = [arg for arg in fzf_args if arg.startswith("--listen=")]
-        assert len(listen_arg) == 1
-        socket_path = listen_arg[0].removeprefix("--listen=")
-        assert socket_path.endswith(".sock")
+
+    assert popen_mock.call_args_list[0].args[0] == ["ruff", "check", "src/"]
+    assert popen_mock.call_args_list[0].kwargs["stdout"] == subprocess.PIPE
+    assert popen_mock.call_args_list[1].args[0][0] == "fzf"
+    assert popen_mock.call_args_list[1].kwargs["stdin"] == subprocess.PIPE
+
+    assert sequence == [
+        "command:enter",
+        "read:test.py:1: error",
+        "fzf:enter",
+        "write:'test.py:1: error'",
+        "read:test.py:2: warning",
+        "write:'\\x00'",
+        "write:'test.py:2: warning'",
+        "stopiteration",
+        "close",
+        "fzf:exit",
+        "command:exit",
+    ]
+
+
+def test_cli_no_output_no_fzf() -> None:
+    """When command produces no output, fzf is not started."""
+    sequence: list[str] = []
+
+    cmd_proc = MagicMock(returncode=0, stdout=iter([]))
+    cmd_proc.__enter__.side_effect = track(
+        sequence, "command:enter", ret=cmd_proc
+    )
+    cmd_proc.__exit__.side_effect = track(sequence, "command:exit", ret=False)
+
+    with (
+        patch(
+            "tuick.cli.subprocess.Popen",
+            autospec=True,
+            side_effect=[cmd_proc],
+        ) as popen_mock,
+        patch("tuick.cli.MonitorThread"),
+    ):
+        runner.invoke(app, ["--", "ruff", "check", "src/"])
+
+    assert popen_mock.call_count == 1
+    assert sequence == ["command:enter", "command:exit"]
 
 
 def test_cli_reload_option() -> None:

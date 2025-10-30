@@ -183,7 +183,8 @@ class BlockSplitter:
         line_type = classify_line(text)
 
         if line_type == LineType.BLANK:
-            yield self.pending_nl
+            if self.pending_nl:
+                yield self.pending_nl
             if self.state not in (State.SUMMARY, State.PYTEST_BLOCK):
                 self._reset_state()
             return
@@ -202,7 +203,8 @@ class BlockSplitter:
         if self.first_block:
             self.first_block = False
 
-        yield self.pending_nl
+        if self.pending_nl:
+            yield self.pending_nl
         yield text
         self.pending_nl = trailing_nl
 
