@@ -153,10 +153,8 @@ def list_command(command: list[str], *, verbose: bool = False) -> None:
             env=env,
         ) as cmd_proc:
             reload_server.cmd_proc = cmd_proc
-            if cmd_proc.stdout is None:
-                return
-
             # Read first chunk to check if there's any output
+            assert cmd_proc.stdout is not None
             chunks = split_blocks(cmd_proc.stdout)
             first_chunk = None
             try:
