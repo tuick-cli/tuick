@@ -1,8 +1,16 @@
 # Tuick Task List
 
+- On abort, print the output of the last load command.
+
+- Add allow_interspersed_args=False to command, so we do not need to use --
+  most of the time.
+
+- Use execute-silent for select_command in client editors.
+
 - Find type-safe solution to avoid cast in ReloadRequestHandler.handle().
 
-- Test editors with CLI integration.
+- Test editors with CLI integration. (Already tested code, surf, cursor, idea,
+  pycharm, micro)
 
 - Test editors with URL integration, on Mac/Linux/Windows.
 
