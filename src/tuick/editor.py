@@ -140,9 +140,17 @@ class PyCharmEditor(BaseEditor):
 
 
 class VSCodeEditor(BaseEditor):
-    """VSCode editor."""
+    """VSCode editor and variants."""
 
-    command_names = ("code",)
+    command_names = ("code", "code-oss", "surf", "cursor")
+
+    def _url_scheme(self) -> str:
+        return {
+            "code": "vscode",
+            "code-oss": "code-oss",
+            "surf": "windsurf",
+            "cursor": "cursor",
+        }[Path(self.editor_path).name]
 
     def get_command(self, location: FileLocation) -> EditorCommand:
         """Build VSCode command, using URL scheme unless --wait present."""
@@ -150,32 +158,11 @@ class VSCodeEditor(BaseEditor):
             dest = f"{location.path}:{location.row}"
             if location.column is not None:
                 dest += f":{location.column}"
-            args = ["code", *self.editor_args, "--goto", dest]
+            args = [self.editor_path, *self.editor_args, "--goto", dest]
             return EditorSubprocess(args)
 
         abs_path = Path(location.path).resolve(strict=True)
-        url = f"vscode://file/{abs_path}:{location.row}"
-        if location.column is not None:
-            url += f":{location.column}"
-        return EditorURL(url)
-
-
-class VSCodeOSSEditor(BaseEditor):
-    """VSCode OSS editor."""
-
-    command_names = ("code-oss",)
-
-    def get_command(self, location: FileLocation) -> EditorCommand:
-        """Build VSCode OSS command, using URL scheme unless --wait present."""
-        if "--wait" in self.editor_args:
-            dest = f"{location.path}:{location.row}"
-            if location.column is not None:
-                dest += f":{location.column}"
-            args = ["code-oss", *self.editor_args, "--goto", dest]
-            return EditorSubprocess(args)
-
-        abs_path = Path(location.path).resolve(strict=True)
-        url = f"code-oss://file/{abs_path}:{location.row}"
+        url = f"{self._url_scheme()}://file/{abs_path}:{location.row}"
         if location.column is not None:
             url += f":{location.column}"
         return EditorURL(url)
@@ -198,25 +185,10 @@ class VimEditor(BaseEditor):
 class EmacsEditor(BaseEditor):
     """Emacs-like editors."""
 
-    command_names = ("emacs", "emacsclient", "gedit")
+    command_names = ("emacs", "emacsclient", "gedit", "kak")
 
     def get_command(self, location: FileLocation) -> EditorCommand:
         """Build emacs command."""
-        if location.column is not None:
-            pos = f"+{location.row}:{location.column}"
-        else:
-            pos = f"+{location.row}"
-        args = [self.editor_path, *self.editor_args, pos, location.path]
-        return EditorSubprocess(args)
-
-
-class KakouneEditor(BaseEditor):
-    """Kakoune editor."""
-
-    command_names = ("kak",)
-
-    def get_command(self, location: FileLocation) -> EditorCommand:
-        """Build kakoune command."""
         if location.column is not None:
             pos = f"+{location.row}:{location.column}"
         else:
@@ -256,17 +228,17 @@ class JoeEditor(BaseEditor):
         return EditorSubprocess(args)
 
 
-class SublimeEditor(BaseEditor):
-    """Sublime Text editor."""
+class FileColonPositionEditor(BaseEditor):
+    """Editors that support the file:line[:col] syntax."""
 
-    command_names = ("subl",)
+    command_names = ("subl", "helix", "hx", "zed")
 
     def get_command(self, location: FileLocation) -> EditorCommand:
-        """Build sublime text command."""
+        """Build text editor command."""
         dest = f"{location.path}:{location.row}"
         if location.column is not None:
             dest += f":{location.column}"
-        args = [self.editor_path, *self.editor_args, dest, "--wait"]
+        args = [self.editor_path, *self.editor_args, dest]
         return EditorSubprocess(args)
 
 
@@ -282,34 +254,6 @@ class MicroEditor(BaseEditor):
         else:
             pos = f"+{location.row}"
         args = [self.editor_path, *self.editor_args, location.path, pos]
-        return EditorSubprocess(args)
-
-
-class HelixEditor(BaseEditor):
-    """Helix editor."""
-
-    command_names = ("helix", "hx")
-
-    def get_command(self, location: FileLocation) -> EditorCommand:
-        """Build helix command."""
-        dest = f"{location.path}:{location.row}"
-        if location.column is not None:
-            dest += f":{location.column}"
-        args = [self.editor_path, *self.editor_args, dest]
-        return EditorSubprocess(args)
-
-
-class ZedEditor(BaseEditor):
-    """Zed editor."""
-
-    command_names = ("zed",)
-
-    def get_command(self, location: FileLocation) -> EditorCommand:
-        """Build zed command."""
-        dest = f"{location.path}:{location.row}"
-        if location.column is not None:
-            dest += f":{location.column}"
-        args = [self.editor_path, *self.editor_args, dest]
         return EditorSubprocess(args)
 
 

@@ -55,7 +55,7 @@ def test_get_editor_from_env_none() -> None:
 @pytest.mark.parametrize(
     ("editor", "location", "expected"),
     [
-        # IntelliJ IDEA - URL scheme
+        # IntelliJ IDEA - URL scheme when no --wait
         (
             "idea",
             FileLocation(path="src/test.py", row=10, column=5),
@@ -76,6 +76,17 @@ def test_get_editor_from_env_none() -> None:
                 "open",
                 "idea://open?file=%2Fproject%2Fsrc%2Ftest.py&line=10&column=5",
             ],
+        ),
+        # IntelliJ IDEA - CLI when --wait
+        (
+            "idea --wait",
+            FileLocation(path="src/test.py", row=10, column=5),
+            ["idea", "--wait", "--line", "10", "--column", "5", "src/test.py"],
+        ),
+        (
+            "idea --wait",
+            FileLocation(path="src/test.py", row=10),
+            ["idea", "--wait", "--line", "10", "src/test.py"],
         ),
         # PyCharm - URL scheme
         (
@@ -119,16 +130,33 @@ def test_get_editor_from_env_none() -> None:
             FileLocation(path="src/test.py", row=10, column=5),
             ["open", "code-oss://file//project/src/test.py:10:5"],
         ),
-        (
-            "code-oss",
-            FileLocation(path="src/test.py", row=10),
-            ["open", "code-oss://file//project/src/test.py:10"],
-        ),
         # VSCode OSS - traditional command when --wait present
         (
             "code-oss --wait",
             FileLocation(path="src/test.py", row=10, column=5),
             ["code-oss", "--wait", "--goto", "src/test.py:10:5"],
+        ),
+        # Windsurf - Like VSCode
+        (
+            "surf",
+            FileLocation(path="src/test.py", row=10, column=5),
+            ["open", "windsurf://file//project/src/test.py:10:5"],
+        ),
+        (
+            "surf --wait",
+            FileLocation(path="src/test.py", row=10, column=5),
+            ["surf", "--wait", "--goto", "src/test.py:10:5"],
+        ),
+        # Cursor - Like VSCode
+        (
+            "cursor",
+            FileLocation(path="src/test.py", row=10, column=5),
+            ["open", "cursor://file//project/src/test.py:10:5"],
+        ),
+        (
+            "cursor --wait",
+            FileLocation(path="src/test.py", row=10, column=5),
+            ["cursor", "--wait", "--goto", "src/test.py:10:5"],
         ),
         # Vim variants
         (
@@ -230,16 +258,16 @@ def test_get_editor_from_env_none() -> None:
             FileLocation(path="src/test.py", row=10, column=5),
             ["ee", "+10", "src/test.py"],
         ),
-        # Sublime Text - file:line:col --wait
+        # Sublime Text - file:line:col
         (
             "subl",
             FileLocation(path="src/test.py", row=10, column=5),
-            ["subl", "src/test.py:10:5", "--wait"],
+            ["subl", "src/test.py:10:5"],
         ),
         (
             "subl",
             FileLocation(path="src/test.py", row=10),
-            ["subl", "src/test.py:10", "--wait"],
+            ["subl", "src/test.py:10"],
         ),
         # Micro - file +line:col
         (
