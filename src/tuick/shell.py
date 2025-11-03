@@ -34,6 +34,20 @@ def _quote_word(word: str, first: bool) -> str:  # noqa: FBT001
 def _needs_quoting(word: str, first: bool) -> bool:  # noqa: FBT001
     if not word:
         return True
-    if not re.match(r"^[a-zA-Z0-9._/\-:,@%+~=]+$", word):
+
+    # According to the shlex module documentation:
+    # Basic safe characters: a-zA-Z0-9_
+    # Additional (punctuation_chars=True): ~-./*?=
+    # Unsafe word separator chars: ();<>|&
+
+    # Weirdly, "*?" are not considered unsafe, but they must be quoted to
+    # prevent globbing (file name expansion). Also, the characters ":,@%+" are
+    # not special (except in association with "{}$"), but are not treated as
+    # safe by shlex.
+
+    # In the end, basic "a-zA-Z0-9_", additional "~-./=" (not * and ?), and our
+    # special list ":,@%+" are safe.
+
+    if not re.match(r"^[a-zA-Z0-9_~\-./=:,@%+]+$", word):
         return True
     return (first and "=" in word[1:]) or word[0] == "~"
