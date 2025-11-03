@@ -11,23 +11,12 @@ from unittest.mock import ANY, Mock, create_autospec, patch
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-import pytest
-from rich.console import Console
 from typer.testing import CliRunner
 
 from tuick.cli import app
 from tuick.reload_socket import ReloadSocketServer
 
 runner = CliRunner()
-
-
-@pytest.fixture
-def console_out():
-    """Patch console with test console using StringIO (no colors)."""
-    output = StringIO()
-    test_console = Console(file=output, force_terminal=False)
-    with patch("tuick.console._console", test_console):
-        yield output
 
 
 def track(seq: list[str], action: str, ret: Any = None):  # noqa: ANN401

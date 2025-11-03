@@ -3,18 +3,18 @@
 import os
 import sys
 from contextlib import contextmanager
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import IO, TYPE_CHECKING, Any
 
-from tuick.shell import quote_command
+from rich.console import Console
+
+from tuick.editor import EditorCommand
+from tuick.shell import quote_command_words
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Iterable, Iterator
 
-    from tuick.editor import EditorCommand
-
-
-from rich.console import Console
 
 TUICK_LOG_FILE = "TUICK_LOG_FILE"
 
@@ -28,23 +28,50 @@ def print_verbose(*args: Any) -> None:  # noqa: ANN401
     _console.file.flush()
 
 
-def print_event(message: str) -> None:
-    """Print an event message.
+def print_entry(command: list[str]) -> None:
+    """Print a process entry event, verbose mode."""
+    words = _style_command(command)
+    _console.print("[bold]>", end=" ")
+    _console.print(*words, style="dim")
+    _console.file.flush()
 
-    Verbose mode.
-    """
-    _console.print(">", message, style="dim bold bright_white")
+
+def print_event(message: str) -> None:
+    """Print an event message, verbose mode."""
+    _console.print("[bold]>", end=" ")
+    _console.print(message, style="dim bold")
     _console.file.flush()
 
 
 def print_command(command: list[str] | EditorCommand) -> None:
-    """Print a command that will be executed in a subprocess.
-
-    Verbose mode.
-    """
-    message = quote_command(command) if isinstance(command, list) else command
-    _console.print("$", message, style="dim bold bright_white")
+    """Print a command to be executed, verbose mode."""
+    if isinstance(command, EditorCommand):
+        command = command.command_words()
+    words = _style_command(command)
+    _console.print("[bold bright_white]$", *words, style="dim")
     _console.file.flush()
+
+
+def _style_command(command: list[str]) -> Iterable[str]:
+    return (
+        _style_shell_word(word, first=i == 0)
+        for i, word in enumerate(quote_command_words(command))
+    )
+
+
+def _style_shell_word(word: str, *, first: bool) -> str:
+    """Style a shell word."""
+    if not word:
+        return ""
+    if "\n" in word:
+        closing = ""
+        if word[0] == word[-1] and word[0] in "'\"":
+            closing = word[0]
+        word = word.split("\n", 1)[0] + "[bold red]···[/]" + closing
+    if first:
+        return f"[bold]{word}"
+    # Do not overdo it, or we will miss out on rich built-in highlighting
+    return word
 
 
 def print_warning(*args: Any) -> None:  # noqa: ANN401
@@ -73,34 +100,36 @@ def setup_log_file() -> Iterator[None]:
     if _console.file is not sys.stderr:
         yield  # Console already redirected, presumably in a test
         return
-    log_cleanup: Callable[[], None]
-    log_file: IO[str]
+
+    with _open_log_file() as (append_file, read_file):
+        _console.file = append_file
+        try:
+            yield
+        finally:
+            while chunk := read_file.read(64 * 1024):
+                sys.stderr.write(chunk)
+            _console.file = sys.stderr
+
+
+@contextmanager
+def _open_log_file() -> Iterator[tuple[IO[str], IO[str]]]:
     env_path = os.environ.get(TUICK_LOG_FILE)
     if env_path:
         # Open the log file if it is set in TUICK_LOG_FILE
         try:
-            log_file = open(env_path, "a")  # noqa: SIM115 PTH123
+            with (
+                Path(env_path).open("a") as append_file,
+                Path(env_path).open("r") as read_file,
+            ):
+                yield append_file, read_file
         except OSError as error:
             print_error("Error opening log file:", error)
             raise SystemExit(1) from error
-        log_cleanup = log_file.close
     else:
         # If TUICK_LOG_FILE is not set, create a temporary log file.
-        tempfile = NamedTemporaryFile(  # noqa: SIM115
-            "a+", prefix="tuick-", suffix=".log"
-        )
-        os.environ[TUICK_LOG_FILE] = tempfile.name
-        log_cleanup = tempfile.close
-        log_file = tempfile.file
-
-    _console.file = log_file
-    try:
-        yield
-    finally:
-        if env_path is None:
-            del os.environ[TUICK_LOG_FILE]
-            log_file.seek(0)
-            while chunk := log_file.read(32 * 1024):
-                sys.stderr.write(chunk)
-        _console.file = sys.stderr
-        log_cleanup()
+        with (
+            NamedTemporaryFile("r", prefix="tuick-", suffix=".log") as tmpfile,
+            Path(tmpfile.name).open("a") as append_file,
+        ):
+            os.environ[TUICK_LOG_FILE] = tmpfile.name
+            yield append_file, tmpfile

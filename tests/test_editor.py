@@ -2,14 +2,14 @@
 
 import os
 import subprocess
-from io import StringIO
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
-from rich.console import Console
 
 import tuick.editor
+from tuick.console import print_command
 from tuick.editor import (
     EditorSubprocess,
     EditorURL,
@@ -17,6 +17,9 @@ from tuick.editor import (
     get_editor_from_env,
 )
 from tuick.parser import FileLocation
+
+if TYPE_CHECKING:
+    from io import StringIO
 
 
 def _mock_resolve(self: Path, *, strict: bool = False) -> Path:
@@ -337,14 +340,12 @@ def test_get_editor_command(
 class TestEditorURL:
     """Tests for EditorURL class."""
 
-    def test_displays_open_command(self) -> None:
+    def test_displays_open_command(self, console_out: StringIO) -> None:
         """Rich console displays 'open {url}'."""
         url = "vscode://file//project/src/test.py:10:5"
         cmd = EditorURL(url)
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        console.print(cmd)
-        assert output.getvalue() == f"open {url}\n"
+        print_command(cmd)
+        assert console_out.getvalue() == f"$ open {url}\n"
 
     @pytest.mark.parametrize(
         ("system", "expected_command"),
@@ -354,7 +355,9 @@ class TestEditorURL:
         ],
     )
     def test_run_uses_popen_for_darwin_and_linux(
-        self, system: str, expected_command: list[str]
+        self,
+        system: str,
+        expected_command: list[str],
     ) -> None:
         """Run() uses Popen with platform-specific command."""
         url = "test://url"
@@ -384,24 +387,17 @@ class TestEditorURL:
 class TestEditorSubprocess:
     """Tests for EditorSubprocess class."""
 
-    def test_displays_formatted_command(self) -> None:
+    def test_displays_formatted_command(self, console_out: StringIO) -> None:
         """Rich console displays shell-quoted command args."""
-        args = ["vim", "+10", "src/test.py"]
-        cmd = EditorSubprocess(args)
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        console.print(cmd)
-        assert output.getvalue() == "vim +10 src/test.py\n"
+        print_command(EditorSubprocess(["vim", "+10", "src/test.py"]))
+        assert console_out.getvalue() == "$ vim +10 src/test.py\n"
 
-    def test_shell_quotes_spaces(self) -> None:
+    def test_shell_quotes_spaces(self, console_out: StringIO) -> None:
         """Rich console correctly shell quotes args with spaces."""
         args = ["/usr/bin/my editor", "--arg", "file with spaces.py"]
-        cmd = EditorSubprocess(args)
-        output = StringIO()
-        console = Console(file=output, force_terminal=False)
-        console.print(cmd)
-        expected = "'/usr/bin/my editor' --arg 'file with spaces.py'\n"
-        assert output.getvalue() == expected
+        print_command(EditorSubprocess(args))
+        expected = "$ '/usr/bin/my editor' --arg 'file with spaces.py'\n"
+        assert console_out.getvalue() == expected
 
     def test_run_calls_subprocess_without_capture(self) -> None:
         """Run() calls subprocess.run without capture_output."""

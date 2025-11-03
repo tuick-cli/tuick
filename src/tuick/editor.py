@@ -2,14 +2,11 @@
 
 import os
 import platform
-import shlex
 import subprocess
 import typing
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
-
-from tuick.shell import quote_command_words
 
 if typing.TYPE_CHECKING:
     from collections.abc import Sequence
@@ -17,38 +14,37 @@ if typing.TYPE_CHECKING:
     from tuick.parser import FileLocation
 
 
-class EditorCommand(typing.Protocol):
-    """Protocol for editor commands."""
+class EditorCommand:
+    """Abstract base class for editor commands."""
 
     def run(self) -> None:
         """Execute the command, may raise subprocess.CalledProcessError."""
-        ...
+        raise NotImplementedError
+
+    def command_words(self) -> list[str]:
+        """Return the command as a list of words."""
+        raise NotImplementedError
 
 
 @dataclass
-class BaseEditorURL:
+class BaseEditorURL(EditorCommand):
     """Editor command using URL scheme."""
 
     url: str
 
-    def _command_words(self) -> list[str]:
+    def command_words(self) -> list[str]:
         """Return the command as a list of words."""
         raise NotImplementedError
 
     def run(self) -> None:
         """Execute the command."""
-        subprocess.run(self._command_words(), check=True)
-
-    def __rich__(self) -> str:
-        """Rich formatted editor URL command."""
-        words = list(quote_command_words(self._command_words()))
-        return f"[bold]{words[0]}[/] {' '.join(words[1:])}"
+        subprocess.run(self.command_words(), check=True)
 
 
 class DarwinEditorUrl(BaseEditorURL):
     """Editor command using URL scheme via 'open' command on Darwin."""
 
-    def _command_words(self) -> list[str]:
+    def command_words(self) -> list[str]:
         """Return the command as a list of words."""
         return ["open", self.url]
 
@@ -60,7 +56,7 @@ class WindowsEditorUrl(BaseEditorURL):
         """Execute the os.startfile command."""
         os.startfile(self.url)  # type: ignore[attr-defined]  # noqa: S606
 
-    def _command_words(self) -> list[str]:
+    def command_words(self) -> list[str]:
         """Return the command as a list of words."""
         return ["start", self.url]
 
@@ -68,7 +64,7 @@ class WindowsEditorUrl(BaseEditorURL):
 class LinuxEditorUrl(BaseEditorURL):
     """Editor command using URL scheme via 'xdg-open' on Linux."""
 
-    def _command_words(self) -> list[str]:
+    def command_words(self) -> list[str]:
         """Return the command as a list of words."""
         return ["xdg-open", self.url]
 
@@ -85,7 +81,7 @@ EditorURL = _setup_editor_url()
 
 
 @dataclass
-class EditorSubprocess:
+class EditorSubprocess(EditorCommand):
     """Editor command using direct subprocess execution."""
 
     args: Sequence[str]
@@ -94,9 +90,9 @@ class EditorSubprocess:
         """Execute the command."""
         subprocess.run(self.args, check=True)
 
-    def __rich__(self) -> str:
-        """Rich formatted subprocess command."""
-        return shlex.join(self.args)
+    def command_words(self) -> list[str]:
+        """Return the command as a list of words."""
+        return list(self.args)
 
 
 class UnsupportedEditorError(ValueError):

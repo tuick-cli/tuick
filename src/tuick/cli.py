@@ -21,6 +21,7 @@ import typer
 import tuick.console
 from tuick.console import (
     print_command,
+    print_entry,
     print_error,
     print_event,
     print_verbose,
@@ -67,7 +68,7 @@ def main(  # noqa: PLR0913
     with tuick.console.setup_log_file():
         if verbose:
             base_cmd = Path(sys.argv[0]).name
-            print_event(quote_command([base_cmd, *sys.argv[1:]]))
+            print_entry([base_cmd, *sys.argv[1:]])
 
         exclusive_options = sum([reload, bool(select), start, bool(message)])
         if exclusive_options > 1:
@@ -125,6 +126,11 @@ def list_command(command: list[str], *, verbose: bool = False) -> None:
         # Create tuick reload coordination server
         reload_server = ReloadSocketServer()
         reload_server.start()
+
+        if verbose:
+            server_info = reload_server.get_server_info()
+            print_verbose("TUICK_PORT:", server_info.port)
+            print_verbose("TUICK_API_KEY:", server_info.api_key)
 
         monitor = MonitorThread(
             callbacks.reload_command,
