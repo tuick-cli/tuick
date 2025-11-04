@@ -99,9 +99,9 @@ tuick: fail_if_claudecode compile
     uv run --dev docformatter --check {{ python_dirs }} \
     || read -p "Auto-format? (enter or ctrl-C) " \
     && uv run --dev docformatter --in-place {{ python_dirs }}
-    uv run --dev tuick -- ruff check --quiet {{ python_dirs }}
-    uv run --dev tuick -- dmypy check {{ python_dirs }}
-    uv run --dev tuick -- pytest --tb=short --no-header
+    uv run --dev tuick -v -- ruff check --quiet {{ python_dirs }}
+    uv run --dev tuick -v -- dmypy check {{ python_dirs }}
+    uv run --dev tuick -v -- pytest --tb=short --no-header
 
 # Report FIXME, TODO, XXX, HACK comments
 [group('dev')]
