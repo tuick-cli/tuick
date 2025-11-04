@@ -1,6 +1,7 @@
 """Tests for the parser module."""
 
 from unittest.mock import patch
+
 import pytest
 
 from tuick.parser import (

@@ -7,6 +7,8 @@ import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
+from tuick.console import print_event, print_verbose
+
 if TYPE_CHECKING:
     import subprocess
 
@@ -51,12 +53,15 @@ class ReloadRequestHandler(socketserver.StreamRequestHandler):
                 self.wfile.write(b"ok\n")
             except ValueError:
                 self.wfile.write(b"error: invalid port\n")
+            else:
+                print_verbose("FZF_PORT:", port_str)
 
         elif command_line == "reload":
             # Terminate cmd_proc if still running
             if server.cmd_proc is not None:
                 proc = server.cmd_proc
                 if proc.poll() is None:  # Still running
+                    print_event("Terminating reload command")
                     proc.terminate()
                     proc.wait()
 

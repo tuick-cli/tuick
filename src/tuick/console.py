@@ -30,16 +30,13 @@ def print_verbose(*args: Any) -> None:  # noqa: ANN401
 
 def print_entry(command: list[str]) -> None:
     """Print a process entry event, verbose mode."""
-    words = _style_command(command)
-    _console.print("[bold]>", end=" ")
-    _console.print(*words, style="dim")
+    _console.print("[bold]>", *_style_command(command))
     _console.file.flush()
 
 
 def print_event(message: str) -> None:
     """Print an event message, verbose mode."""
-    _console.print("[bold]>", end=" ")
-    _console.print(message, style="dim bold")
+    _console.print("[bold]>", message, style="magenta")
     _console.file.flush()
 
 
@@ -48,7 +45,7 @@ def print_command(command: list[str] | EditorCommand) -> None:
     if isinstance(command, EditorCommand):
         command = command.command_words()
     words = _style_command(command)
-    _console.print("[bold bright_white]$", *words, style="dim")
+    _console.print("  [bold]$", *words, style="dim")
     _console.file.flush()
 
 

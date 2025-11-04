@@ -109,7 +109,7 @@ def test_cli_no_output_no_fzf() -> None:
     assert sequence == ["command:enter", "command:exit"]
 
 
-def test_cli_reload_option() -> None:
+def test_cli_reload_option(console_out: StringIO) -> None:
     """--reload waits for go response before starting command subprocess."""
     sequence: list[str] = []
 
@@ -139,8 +139,9 @@ def test_cli_reload_option() -> None:
             patch.dict("os.environ", env),
         ):
             result = runner.invoke(app, ["--reload", "--", "mypy", "src/"])
-            assert result.stdout == "src/test.py:1: error: Test"
-
+        assert result.exit_code == 0
+        assert result.stdout == "src/test.py:1: error: Test"
+        assert console_out.getvalue() == "> Terminating reload command\n"
         # Verify sequence: terminate → wait → popen
         assert sequence == ["terminate", "wait", "popen", "exit"]
     finally:
@@ -184,7 +185,7 @@ def test_cli_select_verbose(console_out: StringIO) -> None:
         result = runner.invoke(*args)
         assert result.exit_code == 0
         assert console_out.getvalue() == (
-            "> tuick '(mock argv)'\n$ vi +10 '+normal! 5l' src/test.py\n"
+            "> tuick '(mock argv)'\n  $ vi +10 '+normal! 5l' src/test.py\n"
         )
         mock_run.assert_called_once()
 

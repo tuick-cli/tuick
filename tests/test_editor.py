@@ -345,7 +345,7 @@ class TestEditorURL:
         url = "vscode://file//project/src/test.py:10:5"
         cmd = EditorURL(url)
         print_command(cmd)
-        assert console_out.getvalue() == f"$ open {url}\n"
+        assert console_out.getvalue() == f"  $ open {url}\n"
 
     @pytest.mark.parametrize(
         ("system", "expected_command"),
@@ -390,13 +390,13 @@ class TestEditorSubprocess:
     def test_displays_formatted_command(self, console_out: StringIO) -> None:
         """Rich console displays shell-quoted command args."""
         print_command(EditorSubprocess(["vim", "+10", "src/test.py"]))
-        assert console_out.getvalue() == "$ vim +10 src/test.py\n"
+        assert console_out.getvalue() == "  $ vim +10 src/test.py\n"
 
     def test_shell_quotes_spaces(self, console_out: StringIO) -> None:
         """Rich console correctly shell quotes args with spaces."""
         args = ["/usr/bin/my editor", "--arg", "file with spaces.py"]
         print_command(EditorSubprocess(args))
-        expected = "$ '/usr/bin/my editor' --arg 'file with spaces.py'\n"
+        expected = "  $ '/usr/bin/my editor' --arg 'file with spaces.py'\n"
         assert console_out.getvalue() == expected
 
     def test_run_calls_subprocess_without_capture(self) -> None:

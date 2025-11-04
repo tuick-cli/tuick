@@ -87,7 +87,7 @@ def main(  # noqa: PLR0913
         elif select:
             select_command(select, verbose=verbose)
         elif start:
-            start_command(verbose=verbose)
+            start_command()
         elif message:
             message_command(message)
         else:
@@ -238,23 +238,20 @@ def _run_command_and_stream_blocks(
         for block in split_blocks(process.stdout):
             output.write(block)
             if len(block) > 1:
-                # Current split_blocks implementation sometimes yields single
-                # chars, like nulls and newlines. No need to flush those
-                # because there is nothing to display
+                # split_blocks sometimes yields single chars, like nulls and
+                # newlines. Do not flush those, there is nothing to display
                 output.flush()
     if verbose:
         print_verbose("  Reload command exit:", process.returncode)
 
 
-def start_command(*, verbose: bool = False) -> None:
+def start_command() -> None:
     """Notify parent process of fzf port."""
     fzf_port = os.environ.get("FZF_PORT")
     if not fzf_port:
         print_error(None, "Missing environment variable: FZF_PORT")
         raise typer.Exit(1)
     _send_to_tuick_server(f"fzf_port: {fzf_port}", "ok")
-    if verbose:
-        print_verbose("  fzf_port:", fzf_port)
 
 
 def reload_command(command: list[str], *, verbose: bool = False) -> None:

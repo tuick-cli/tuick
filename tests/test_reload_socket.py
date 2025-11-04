@@ -1,5 +1,6 @@
 """Tests for cross-platform reload socket IPC."""
 
+from io import StringIO
 import socket
 import subprocess
 from dataclasses import dataclass
@@ -98,6 +99,7 @@ def test_server_responds_go_to_reload_message(
 
 def test_server_terminates_running_cmd_proc(
     server_with_key: ServerFixture,
+    console_out: StringIO,
 ) -> None:
     """Server terminates and waits for cmd_proc on reload."""
     # Setup mock process that is still running
@@ -110,6 +112,8 @@ def test_server_terminates_running_cmd_proc(
     assert response == "go"
     mock_proc.terminate.assert_called_once()
     mock_proc.wait.assert_called_once()
+
+    assert console_out.getvalue() == "> Terminating reload command\n"
 
 
 def test_server_handles_already_exited_cmd_proc(
