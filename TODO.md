@@ -1,6 +1,16 @@
 # Tuick Task List
 
 - On abort, print the output of the last load command.
+  - Reload command writes raw output to the top process, through the socket,
+    require new socket command "save-output".
+  - save-output command follow by sequence of one line containing decimal
+    length, then that many bytes of binary output, then a line containing
+    "end".
+  - Server starts a thread to read from the socket and write to a temporary
+    file, can be unnamed temporary file. If connection is closed before "end",
+    close temp file. If connection reaches end, commit temp file.
+  - On fzf process termination, if status is 130, print the content of the
+    tempfile.
 
 - Add allow_interspersed_args=False to command, so we do not need to use --
   most of the time.
