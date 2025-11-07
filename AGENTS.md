@@ -20,6 +20,10 @@
 
 ### Design and Development
 
+- Mechanical refactoring: when doing 5+ similar edits (type renames, import
+  updates, signature changes), consider delegation to faster processing if your
+  agent supports it
+
 #### Architecture
 
 - datafirst: Design data structures first: names, attributes, types, docstrings.
@@ -43,6 +47,8 @@
 - Preserve compact notation for function signatures: keep on one line when
   possible. For function calls with long arguments, use intermediate variables
   to prevent wrapping and reduce vertical space waste.
+- Docstring first line must be concise, details go in body or comments
+- Implementation details belong in comments, not docstrings
 
 #### Test Driven Develompent (TDD)
 
@@ -75,6 +81,8 @@
 - Never run pytest or `just test` directly, always use `just agent-test` which
   adds flags to prevent context bloat and format errors for machine readability
 - Read error messages: they contain hints or directions
+- Never guess at fixes: get proper diagnostics (tracebacks, error output) before
+  fixing. If error output is unclear, add logging or error handlers first.
 - Spec mocks: always use create_autospec() or patch(autospec=True), do not use
   plain Mock or MagicMock
 - Do not mock the hell out of things. When testing the happy path of a single
@@ -86,6 +94,9 @@
   - Instead assert a single comparison for the whole structure
   - If some items must be ignored in the comparison, build a dict for the
     comparison, omitting those items.
+- Fixture design: avoid implicit/magical behavior. If a fixture has side effects
+  or requirements (like output checking), make them explicit through method
+  calls, not automatic in teardown based on hidden state.
 - testsync: Multithreaded tests must use proper synchronization.
   - testawake: `time.sleep()` is _strictly forbidden_ in tests.
   - fastgreen: Never block on the green path. The execution of a successful test
