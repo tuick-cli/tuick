@@ -1,13 +1,5 @@
 # Tuick Task List
 
-- BUG[med]: Create custom Popen subclass with thread-safe wait(): add lock
-  around wait() method since it can be called from main thread (normal
-  completion) or reload server thread (termination).
-
-- BUG[med]: Fix race condition in reload server: catch ProcessLookupError from
-  .terminate() to handle process that already completed. The proc.poll() check
-  before proc.terminate() is insufficient.
-
 - QA[high]:Test editors with CLI integration. (Already tested code, surf,
   cursor, idea, pycharm, micro)
 
