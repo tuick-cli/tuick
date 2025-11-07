@@ -2,6 +2,7 @@
 
 import os
 import sys
+import traceback
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -30,6 +31,9 @@ def print_verbose(*args: Any) -> None:  # noqa: ANN401
 
 def print_exception() -> None:
     """Print exception with traceback and local variables."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        traceback.print_exc(file=_console.file)
+        return
     _console.print_exception(show_locals=True)
     _console.file.flush()
 
