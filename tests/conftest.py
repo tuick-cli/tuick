@@ -35,7 +35,7 @@ class ConsoleFixture:
         """Assert no unexpected output if not already checked."""
         if not self._checked:
             output = self._output.getvalue()
-            assert output == "", f"Unexpected console output: {output}"
+            assert output == "", "Unexpected console output"
 
 
 @pytest.fixture

@@ -75,7 +75,7 @@ test *ARGS: fail_if_claudecode
 agent-test *ARGS:
     #!/usr/bin/env bash -euo pipefail
     quietly () { out=$("$@" >&1) || { local s=$?; echo "$out"; return $s; }; }
-    quietly uv run --dev pytest --no-header --quiet --tb=short -p no:icdiff {{ ARGS }}
+    quietly uv run --dev pytest --no-header --quiet --tb=short -p no:icdiff -o truncation_limit_lines=7{{ ARGS }}
     if ! {{ is_dependency() }}; then echo OK; fi
 
 # Static code analysis and style checks
