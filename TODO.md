@@ -3,6 +3,24 @@
 - Integration with reviewdog/errorformat. Maybe need to integrate custom regex
   for ruff and pytest.
 
+  We are adding a dependency, you will do careful analysis on whether we use
+  reviewdog or errorformat. The plan is to add a new option, for tuick command
+  inside the build scripts to parse errors with a syntax chosen based on the
+  build command line passed in arguments. Name of the option TBD. We want to
+  group related lines to display multi-line errors for a single location as
+  multi-line blocks. So reload will go through "tuick --reload -- builder" that
+  will run a "make/just etc." command that will call "tuick --tbd --
+  compiler/checker", that will produce blocks with all needed information, with
+  appropriate delimiters (maybe ascii control chars, they should probably be
+  stripped from the output before parsing, cdiff in python can output NULL and
+  \01 chars), delimiters not likely to occur in the input.
+
+  Produce detailed analysis, test plan, and implementation plan. If you need to
+  get an overview of the current implementation, send a cheap agent to produce a
+  token efficient map according to your specifications. Save the map for reuse
+  and update. You will also prepare an update to AGENTS.md prescribing how to
+  use and update the map.
+
 - Configurable editor commands
 
 - QA[high]:Test editors with CLI integration. (Already tested code, surf,
