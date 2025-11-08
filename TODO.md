@@ -1,5 +1,10 @@
 # Tuick Task List
 
+- Integration with reviewdog/errorformat. Maybe need to integrate custom regex
+  for ruff and pytest.
+
+- Configurable editor commands
+
 - QA[high]:Test editors with CLI integration. (Already tested code, surf,
   cursor, idea, pycharm, micro)
 
@@ -33,10 +38,10 @@
   2. Hidden data (--with-nth) or invisible delimiters (so the path and line
      number are in fixed fields)
 
-- FEAT[low]: Optimize output handling: use binary files for saved output
-  instead of text files, use TextIOWrapper when printing to console. This
-  avoids redundant decode-encode operations when streaming output through
-  sockets and files.
+- FEAT[low]: Optimize output handling: use binary files for saved output instead
+  of text files, use TextIOWrapper when printing to console. This avoids
+  redundant decode-encode operations when streaming output through sockets and
+  files.
 
 - FEAT[low]: Enable filtering.
   - That (probably) implies removing the "zero:abort" binding.
