@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import tuick.editor
-from tuick.console import print_command
+from tuick.console import print_command, set_verbose
 from tuick.editor import (
     EditorSubprocess,
     EditorURL,
@@ -342,6 +342,7 @@ class TestEditorURL:
 
     def test_displays_open_command(self, console_out: ConsoleFixture) -> None:
         """Rich console displays 'open {url}'."""
+        set_verbose()
         url = "vscode://file//project/src/test.py:10:5"
         cmd = EditorURL(url)
         print_command(cmd)
@@ -391,11 +392,13 @@ class TestEditorSubprocess:
         self, console_out: ConsoleFixture
     ) -> None:
         """Rich console displays shell-quoted command args."""
+        set_verbose()
         print_command(EditorSubprocess(["vim", "+10", "src/test.py"]))
         assert console_out.getvalue() == "  $ vim +10 src/test.py\n"
 
     def test_shell_quotes_spaces(self, console_out: ConsoleFixture) -> None:
         """Rich console correctly shell quotes args with spaces."""
+        set_verbose()
         args = ["/usr/bin/my editor", "--arg", "file with spaces.py"]
         print_command(EditorSubprocess(args))
         expected = "  $ '/usr/bin/my editor' --arg 'file with spaces.py'\n"

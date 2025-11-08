@@ -5,6 +5,8 @@ import subprocess
 from typing import TYPE_CHECKING
 from unittest.mock import Mock
 
+from tuick.console import set_verbose
+
 if TYPE_CHECKING:
     from .conftest import ConsoleFixture, ServerFixture
 
@@ -38,6 +40,7 @@ def test_server_accepts_valid_fzf_port_message(
     console_out: ConsoleFixture,
 ) -> None:
     """Server stores fzf_port and responds ok."""
+    set_verbose()
     response = server_with_key.send("fzf_port: 12345")
 
     assert response == "ok"
@@ -70,6 +73,7 @@ def test_server_terminates_running_cmd_proc(
 ) -> None:
     """Server terminates and waits for cmd_proc on reload."""
     # Setup mock process that is still running
+    set_verbose()
     mock_proc = Mock(spec=subprocess.Popen)
     mock_proc.poll.return_value = None  # Still running
     server_with_key.server.cmd_proc = mock_proc

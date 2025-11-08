@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 from rich.console import Console
 
+import tuick.console
 from tuick.reload_socket import ReloadSocketServer
 
 if TYPE_CHECKING:
@@ -50,6 +51,7 @@ class ConsoleFixture:
 @pytest.fixture
 def console_out() -> Iterator[ConsoleFixture]:
     """Patch console with test console using StringIO (no colors)."""
+    tuick.console._verbose = False
     output = StringIO()
     test_console = Console(file=output, force_terminal=False)
     fixture = ConsoleFixture(output)

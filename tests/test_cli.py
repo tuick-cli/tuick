@@ -1,5 +1,6 @@
 """Tests for the CLI module."""
 
+import functools
 import io
 import socket
 import subprocess
@@ -9,16 +10,47 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import ANY, Mock, create_autospec, patch
 
 import pytest
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-    from .conftest import ConsoleFixture, ServerFixture
-
-from typer.testing import CliRunner
+import typer.testing
 
 from tuick.cli import app
 from tuick.reload_socket import ReloadSocketServer
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+
+    # typer.testing.Result is not explicitly exported and is an alias for
+    # click.testing.Result
+    from click.testing import Result as TestingResult
+
+    from .conftest import ConsoleFixture, ServerFixture
+
+
+class CliRunner(typer.testing.CliRunner):
+    """Typer CLI runner that patches sys.argv."""
+
+    def invoke(  # type: ignore[override]
+        self,
+        app: typer.Typer,
+        args: str | Sequence[str] | None,
+        *args_,  # noqa: ANN002
+        **kwargs,  # noqa: ANN003
+    ) -> TestingResult:
+        """Invoke the CLI with patched sys.argv."""
+        if isinstance(args, str):
+            args = [args]
+        elif args is None:
+            args = []
+        with patch("sys.argv", ["tuick", *args]):  # type: ignore[call-overload]
+            result = super().invoke(app, args, *args_, **kwargs)
+            exception = result.exception
+            if isinstance(exception, Exception) and not isinstance(
+                exception, typer.Exit
+            ):
+                raise exception
+            return result
+
+    functools.update_wrapper(invoke, typer.testing.CliRunner.invoke)
+
 
 runner = CliRunner()
 
@@ -161,6 +193,7 @@ def test_cli_reload_option(console_out: ConsoleFixture) -> None:
 
     mock_process = create_autospec(subprocess.Popen, instance=True)
     mock_process.stdout = iter(["src/test.py:1: error: Test\n"])
+    mock_process.returncode = 1
     mock_process.__enter__.side_effect = track(
         sequence, "popen", ret=mock_process
     )
@@ -173,10 +206,12 @@ def test_cli_reload_option(console_out: ConsoleFixture) -> None:
             patch("tuick.cli.subprocess.Popen", return_value=mock_process),
             patch.dict("os.environ", env),
         ):
-            result = runner.invoke(app, ["--reload", "--", "mypy", "src/"])
+            result = runner.invoke(
+                app, ["--reload", "-v", "--", "mypy", "src/"]
+            )
         assert result.exit_code == 0
         assert result.stdout == "src/test.py:1: error: Test"
-        assert console_out.getvalue() == "> Terminating reload command\n"
+        assert "> Terminating reload command\n" in console_out.getvalue()
         # Verify sequence: terminate → wait → popen
         assert sequence == ["terminate", "wait", "popen", "exit"]
     finally:
@@ -273,7 +308,7 @@ def test_cli_select_verbose_no_location(console_out: ConsoleFixture) -> None:
         mock_run.assert_not_called()
 
 
-def test_cli_exclusive_options() -> None:
+def test_cli_exclusive_options(console_out: ConsoleFixture) -> None:
     """--reload and --select are mutually exclusive."""
     result = runner.invoke(
         app, ["--reload", "--select", "foo", "--", "mypy", "src/"]
@@ -281,7 +316,9 @@ def test_cli_exclusive_options() -> None:
     assert result.exit_code != 0
 
 
-def test_cli_abort_after_initial_load_prints_output() -> None:
+def test_cli_abort_after_initial_load_prints_output(
+    console_out: ConsoleFixture,
+) -> None:
     """On fzf abort (exit 130) after initial load, print initial output."""
     sequence: list[str] = []
 
