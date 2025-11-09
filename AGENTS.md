@@ -83,6 +83,10 @@
 - Read error messages: they contain hints or directions
 - Never guess at fixes: get proper diagnostics (tracebacks, error output) before
   fixing. If error output is unclear, add logging or error handlers first.
+- Verify before fixing: When a bug is described in TODO.md or elsewhere, verify
+  the problem exists before implementing a fix. Check documentation, stdlib
+  source, or write a reproduction test. Don't assume the bug description is
+  accurate without verification.
 - Spec mocks: always use create_autospec() or patch(autospec=True), do not use
   plain Mock or MagicMock
 - Do not mock the hell out of things. When testing the happy path of a single
@@ -101,6 +105,10 @@
   - testawake: `time.sleep()` is _strictly forbidden_ in tests.
   - fastgreen: Never block on the green path. The execution of a successful test
     must never block on a timeout.
+  - testrace: Don't test race conditions by trying to trigger undefined behavior.
+    Test that synchronization mechanisms work by verifying concurrent operations
+    complete successfully. Use explicit synchronization (Events, Barriers) to
+    control thread timing in tests.
   - The green execution path can move from one thread to another through
     blocking synchronization.
   - After teardown of a successful test, all created threads and processes must
@@ -143,3 +151,13 @@
 - Avoid business-speak, buzzwords, unfounded self-affirmations
 - State facts directly even if they don't conform to requests
 - Use Markdown formatting
+
+### Documentation
+
+#### Codebase Map
+
+- Location: `docs/codebase-map.md`
+- Purpose: Token-efficient reference for understanding architecture
+- Update when: major architectural changes, new modules, data flow changes
+- Keep concise: focus on structure and data flow, not implementation details
+- Update atomically: include map updates in feature commits, not separately
