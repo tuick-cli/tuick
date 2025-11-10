@@ -62,10 +62,14 @@ def open_fzf_process(
         "space:down",
         "backspace:up",
     ]
+    if theme := os.getenv("TERM_THEME"):
+        color_opt = ["--color=" + theme]
+    else:
+        color_opt = []
     fzf_cmd = [
         *("fzf", "--listen", "--read0", "--track"),
         *("--no-sort", "--reverse", "--header-border"),
-        *("--ansi", "--color=dark", "--highlight-line", "--wrap"),
+        *("--ansi", *color_opt, "--highlight-line", "--wrap"),
         *("--disabled", "--no-input", "--bind"),
         ",".join(fzf_bindings),
     ]
