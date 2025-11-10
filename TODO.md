@@ -2,25 +2,32 @@
 
 - **Errorformat Integration** (see `docs/PLAN-errorformat-integration.md`)
 
-  Add `tuick --format COMMAND` for error parsing with errorformat library.
+  Add errorformat-based parsing with three modes.
+
+  **Modes**:
+  - Default: `tuick ruff check` → auto-detect → parse → fzf (simple case)
+  - Top: `tuick make` → parse mixed stream → fzf (orchestrator)
+  - Nested: `tuick --format ruff check` → structured blocks output
 
   **Outline**:
-  1. Add --format command to CLI (route, options, tests)
-  2. Tool detection module (ERRORFORMAT_MAP, detect_tool)
-  3. Errorformat wrapper (subprocess, ANSI handling, location extraction)
-  4. Block assembly (boundaries, formatting with \x1F delimiters)
-  5. Implement format_command (wire components)
-  6. Update list_command (collect blocks, configure fzf delimiter)
-  7. Update select_command (receive fields from fzf)
-  8. Update reload_command (propagate format)
-  9. Documentation (README, codebase-map, errorformat-guide)
+  1. Write xfail integration tests (simple, top-format, format passthrough)
+  2. Add --format and --top to CLI (route, options, TUICK_NESTED env var)
+  3. Tool detection (ERRORFORMAT_MAP, detect_tool for build systems + checkers)
+  4. Errorformat wrapper (subprocess, ANSI handling, location extraction)
+  5. Block assembly with markers (\x02, \x03)
+  6. Implement format_command (nested mode, check TUICK_NESTED)
+  7. Implement top_command (orchestrator, two-layer parsing)
+  8. Update default command (check TUICK_NESTED)
+  9. Update fzf integration (delimiter config)
+  10. Update select_command (receive fields from fzf)
+  11. Update reload_command (propagate mode/format)
+  12. Documentation (README, codebase-map, errorformat-guide)
 
   **Block format**: `file\x1fline\x1fcol\x1fend-line\x1fend-col\x1fcontent\0`
 
-  **fzf config**: `--delimiter=\x1f --with-nth=6`
+  **Nested output**: `\x02block1\0block2\x03` (no trailing \0)
 
-  **Open questions**: errorformat multi-line blocks, ANSI stripping, block
-  boundaries
+  **fzf config**: `--delimiter=\x1f --with-nth=6`
 
 - Configurable editor commands
 

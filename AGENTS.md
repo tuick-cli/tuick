@@ -38,9 +38,18 @@
 - Document unknowns as open questions for research
 - Do not make assumptions about implementation details
 - Expect iterative refinement through conversation
+- Validate understanding: Before finalizing plans or making changes, reformulate
+  your understanding back to the user for confirmation. Present concrete examples
+  of the proposed behavior.
 - Use appendices for supporting information
 - Create/update codebase map early for session continuity
 - In plan mode: no file writes until plan approved
+
+#### Interface Design
+
+- Present usage examples before implementation details when designing interfaces
+- Show concrete examples of how users will interact with the system
+- Validate that common cases are simple and require minimal configuration
 
 #### Code Quality
 
@@ -111,6 +120,9 @@
 - Fixture design: avoid implicit/magical behavior. If a fixture has side effects
   or requirements (like output checking), make them explicit through method
   calls, not automatic in teardown based on hidden state.
+- xfail integration tests: For multi-mode features, write xfail integration
+  tests for each configuration first, not unit tests for routing. Remove xfail
+  as each mode is implemented.
 - testsync: Multithreaded tests must use proper synchronization.
   - testawake: `time.sleep()` is _strictly forbidden_ in tests.
   - fastgreen: Never block on the green path. The execution of a successful test
