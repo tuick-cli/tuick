@@ -27,6 +27,7 @@ _pytest-opts := "--no-header --tb=short"
 _bash-defs := '''
 run_dev="''' + _run-dev + '''"
 python_dirs="''' + _python-dirs + '''"
+full_diff=''' + full-diff + ''';
 COMMAND="''' + style('command') + '''"
 NORMAL="''' + NORMAL + '''"
 safe () { "$@" || status=false; }
@@ -35,8 +36,12 @@ show () { echo "$COMMAND$*$NORMAL"; }
 visible () { show "$@"; "$@"; }
 report () { local s=$?; show "$@"; echo "$out"; return $s; }
 quiet () { out=$("$@" >&1) || report "$@"; }
+pytest-agent-filter () {
+    $full_diff && while read -r line
+    do [[ $line =~ ^===+\ FAILURES\ ===+$ ]] && break; done
+    cat
+}
 '''
-
 # Pytest options.
 # Run with full-diff=true for full diffs.
 
@@ -44,9 +49,9 @@ full-diff := 'false'
 [private]
 _diff-limit-opt := ' -o truncation_limit_lines=7'
 [private]
-_pytest-diff-opt := if full-diff == 'true' { '' } else { _diff-limit-opt }
+_pytest-diff-opt := if full-diff == 'true' { ' --verbose' } else { ' --quiet' + _diff-limit-opt }
 [private]
-_pytest-agent-opts := _pytest-opts + " --quiet -p no:icdiff" + _pytest-diff-opt
+_pytest-agent-opts := _pytest-opts + " -p no:icdiff" + _pytest-diff-opt
 
 # Development workflow: check, test
 [group('dev')]
@@ -61,8 +66,9 @@ dev: _fail_if_claudecode compile
 agent *ARGS: agent-compile
     #!/usr/bin/env bash -euo pipefail
     {{ _bash-defs }} {{ _agent-check-body }}
-    quiet {{ _run-dev }} pytest {{ _pytest-agent-opts }} {{ ARGS }} \
-    || { echo 'For full diffs: "just agent full-diff=true"'; status=false; }
+    safe quiet {{ _run-dev }} pytest {{ _pytest-agent-opts }} {{ ARGS }} \
+    | pytest-agent-filter \
+    || $full_diff || echo 'For full diff: just full-diff=true agent"'
     end-safe && echo OK
 
 # Clean build files
@@ -111,9 +117,11 @@ test *ARGS: _fail_if_claudecode
 agent-test *ARGS:
     #!/usr/bin/env bash -euo pipefail
     {{ _bash-defs }}
-    if quiet {{ _run-dev }} pytest {{ _pytest-agent-opts }} {{ ARGS }}; \
+    quiet {{ _run-dev }} pytest {{ _pytest-agent-opts }} {{ ARGS }} \
+    | pytest-agent-filter \
     && { {{ is_dependency() }} || echo OK; } \
-    || { echo 'For full diffs: "just test full-diff=true"'; false; }
+    || { $full_diff || echo 'For full diff: just full-diff=true agent-test';
+         false; }
 
 # Static code analysis and style checks
 [group('dev')]
@@ -154,7 +162,7 @@ todo:
 agent-check: agent-compile
     #!/usr/bin/env bash -euo pipefail
     {{ _bash-defs }} {{ _agent-check-body }}
-    end-safe && { {{ is_dependency() }} ||  echo OK; }
+    end-safe && { {{ is_dependency() }} ||  echo OK; }s
 
 [private]
 _agent-check-body := '''
