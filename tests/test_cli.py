@@ -332,8 +332,8 @@ def test_cli_exclusive_options(console_out: ConsoleFixture) -> None:
     )
     assert result.exit_code != 0
     expected = (
-        "Error: Options --reload, --select, --start, and --message are"
-        " mutually exclusive\n"
+        "Error: Options --reload, --select, --start, --message, --format,"
+        " and --top are mutually exclusive\n"
     )
     assert console_out.getvalue() == expected
 

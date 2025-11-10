@@ -67,6 +67,14 @@ def main(  # noqa: PLR0913
     message: str = typer.Option(
         "", "--message", help="Internal: log a message"
     ),
+    format: bool = typer.Option(  # noqa: A002
+        False,
+        "--format",
+        help="Format mode: parse and output structured blocks",
+    ),
+    top: bool = typer.Option(
+        False, "--top", help="Top mode: orchestrate nested tuick commands"
+    ),
     verbose: bool = typer.Option(
         False, "-v", "--verbose", help="Show verbose output"
     ),
@@ -77,11 +85,13 @@ def main(  # noqa: PLR0913
             set_verbose()
         print_entry([Path(sys.argv[0]).name, *sys.argv[1:]])
 
-        exclusive_options = sum([reload, bool(select), start, bool(message)])
+        exclusive_options = sum(
+            [reload, bool(select), start, bool(message), format, top]
+        )
         if exclusive_options > 1:
             message = (
-                "Options --reload, --select, --start, and --message are"
-                " mutually exclusive"
+                "Options --reload, --select, --start, --message, --format,"
+                " and --top are mutually exclusive"
             )
             print_error(None, message)
             raise typer.Exit(1)
@@ -97,6 +107,10 @@ def main(  # noqa: PLR0913
             start_command()
         elif message:
             message_command(message)
+        elif format:
+            format_command(command)
+        elif top:
+            top_command(command)
         else:
             list_command(command, verbose=verbose)
 
@@ -372,6 +386,30 @@ def message_command(message: str) -> None:
         print_verbose("  [cyan]Loading complete")
     elif message == "ZERO":
         print_warning("  Reload produced no output")
+
+
+def format_command(command: list[str]) -> None:
+    """Format mode: parse and output structured blocks if TUICK_NESTED=1."""
+    tuick_nested = os.environ.get("TUICK_NESTED")
+
+    if not tuick_nested:
+        # Passthrough mode: just run command without capturing
+        print_command(command)
+        result = subprocess.run(command, check=False)
+        sys.exit(result.returncode)
+
+    # TODO: Implement structured block output with errorformat
+    # This will be implemented in step 4-6 of the plan
+    print_error(None, "Structured output not yet implemented")
+    raise typer.Exit(1)
+
+
+def top_command(_command: list[str]) -> None:
+    """Top mode: orchestrate nested tuick commands with TUICK_NESTED=1."""
+    # TODO: Implement two-layer parsing with errorformat
+    # This will be implemented in step 7 of the plan
+    print_error(None, "Top mode not yet implemented")
+    raise typer.Exit(1)
 
 
 if __name__ == "__main__":

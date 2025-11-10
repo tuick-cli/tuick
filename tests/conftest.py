@@ -53,7 +53,7 @@ def console_out() -> Iterator[ConsoleFixture]:
     """Patch console with test console using StringIO (no colors)."""
     tuick.console._verbose = False
     output = StringIO()
-    test_console = Console(file=output, force_terminal=False)
+    test_console = Console(file=output, force_terminal=False, soft_wrap=True)
     fixture = ConsoleFixture(output)
 
     with patch("tuick.console._console", test_console):
