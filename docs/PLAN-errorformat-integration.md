@@ -1,7 +1,7 @@
 # Feature Plan: Reviewdog/Errorformat Integration
 
 **Created**: 2025-11-09
-**Updated**: 2025-11-10
+**Updated**: 2025-11-11
 **Status**: Approved - Ready for Implementation
 
 ## Goal
@@ -10,6 +10,24 @@ Add errorformat-based parsing with three modes:
 - **Default**: `tuick ruff check` → auto-detect → parse → fzf (simple case)
 - **Top**: `tuick make` → parse mixed stream → fzf (build system orchestrator)
 - **Nested**: `tuick --format ruff check` → structured blocks output
+
+## Workflow Summary
+
+The errorformat integration affects two main commands that both use `split_blocks()`:
+
+1. **list_command** (initial load): `tuick COMMAND`
+   - Runs command subprocess
+   - Calls `split_blocks()` directly on command output
+   - Streams blocks to fzf stdin
+
+2. **reload_command** (reload on ctrl-r): `tuick --reload COMMAND`
+   - Triggered by fzf binding when user presses ctrl-r
+   - Runs command subprocess
+   - Calls `_process_output_and_yield_raw()` which calls `split_blocks()`
+   - Streams blocks to stdout (fzf reads via --reload)
+   - Saves raw output for abort recovery
+
+**Key insight**: Both commands share the same parsing path through `split_blocks()`, so implementing errorformat support in `split_blocks()` automatically makes it work for both initial load and reload operations.
 
 ## Three Modes
 
@@ -122,6 +140,28 @@ Build system: tuick --format gcc compile.c
       → if set: parse and output blocks with markers
       → if not: streaming passthrough
 ```
+
+### Reload Flow
+
+**Critical insight**: reload_command reuses the same implementation as list_command:
+- Both call `split_blocks()` for parsing
+- Same streaming approach (blocks to stdout/fzf)
+- Same raw output saving (for abort recovery)
+
+```
+User presses ctrl-r in fzf
+  → fzf executes: tuick --reload [--format/--top] -- COMMAND
+  → reload_command()
+      ├─→ Coordinate with ReloadSocketServer
+      ├─→ _create_command_process(COMMAND)
+      └─→ _process_output_and_yield_raw(process, sys.stdout)
+            ├─→ split_blocks(process.stdout) → blocks
+            │       ↓
+            │   Write blocks to sys.stdout (fzf reads via --reload)
+            └─→ Yield raw lines for saving to server
+```
+
+**Implementation**: Errorformat integration in split_blocks() automatically works for reload_command because it uses the same code path as list_command.
 
 ## Components
 
@@ -276,9 +316,12 @@ def detect_tool(cmd: list[str]) -> str:
 - Receive location fields from fzf
 - Build FileLocation from fields
 
-### 11. Update reload_command
-- Ensure mode and format propagation
-- Tests: reload preserves mode/format
+### 11. Update reload_command for errorformat modes
+- **Critical**: reload_command already uses split_blocks() via _process_output_and_yield_raw()
+- Same implementation path as list_command for streaming
+- Propagate --format and --top flags through callbacks
+- Ensure CallbackCommands includes mode/format in reload binding
+- Tests: reload preserves mode/format for all three modes
 
 ### 12. Documentation
 - README: three modes, usage examples

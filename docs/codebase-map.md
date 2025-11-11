@@ -2,7 +2,7 @@
 
 **Purpose**: Token-efficient reference for understanding tuick architecture and locating code for modifications.
 
-**Last Updated**: 2025-11-09
+**Last Updated**: 2025-11-11
 
 ## Project Overview
 
@@ -279,6 +279,8 @@ list_command()
 
 ### Reload Flow: User presses 'r' in fzf
 
+**Key**: reload_command shares implementation with list_command via `split_blocks()`
+
 ```
 User presses ctrl-r in fzf
     ↓
@@ -289,9 +291,7 @@ reload_command()
     │       ↓
     │   Send "reload" message
     │       ↓
-    │   Wait for "go" response
-    │       ↓
-    │   Server kills old process
+    │   Wait for "go" response (server kills old process)
     │       ↓
     │   Server responds "go"
     │
@@ -301,21 +301,21 @@ reload_command()
     │       ↓
     │   subprocess.Popen(["ruff", "check"])
     │
-    └─→ _process_output_and_yield_raw(proc.stdout)
-            ├─→ For each line:
-            │   ├─→ yield raw_line (to save-output socket)
-            │   └─→ buffer for split_blocks()
-            │
-            ├─→ split_blocks(buffered) → blocks
+    └─→ _process_output_and_yield_raw(proc.stdout, sys.stdout)
+            ├─→ split_blocks(proc.stdout) → blocks
             │       ↓
-            │   Write to stdout (fzf reads via --reload)
+            │   Write blocks to sys.stdout (fzf reads via --reload)
             │
-            └─→ Server commits temp output file
+            └─→ Yield raw lines for saving
                     ↓
-                Server updates saved_output_file
+                Send raw output to save-output socket
                     ↓
-                Future reloads see this output
+                Server commits temp output file → saved_output_file
+                    ↓
+                Future abort prints this output
 ```
+
+**Shared parsing path**: Both list_command and reload_command call `split_blocks()`, so changes to block splitting logic (e.g., errorformat integration) automatically work for both modes.
 
 ## Key Integration Points
 
@@ -327,8 +327,13 @@ reload_command()
 - Keep existing logic as fallback
 
 **Secondary**: `cli.py` - `list_command()` and `reload_command()`
+- Both call `split_blocks()` through shared implementation
+- `list_command()`: calls `split_blocks()` directly on command output (line 183)
+- `reload_command()`: calls `_process_output_and_yield_raw()` which calls `split_blocks()` (line 334)
 - Pass format configuration to split_blocks()
-- Add `--format` option propagation
+- Add `--format` and `--top` option propagation through callbacks
+
+**Shared implementation**: Both modes use split_blocks() for parsing, so errorformat integration in split_blocks() automatically works for both list and reload modes.
 
 ### Current Parsing Logic
 
