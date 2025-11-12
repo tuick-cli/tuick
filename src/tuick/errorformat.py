@@ -6,6 +6,7 @@ import subprocess
 import typing
 from dataclasses import dataclass
 
+from tuick.ansi import strip_ansi
 from tuick.errorformats import (
     BUILTIN_TOOLS,
     CUSTOM_PATTERNS,
@@ -124,10 +125,25 @@ def parse_with_errorformat(tool: str, lines: Iterable[str]) -> Iterator[str]:
 
     Args:
         tool: Tool name matching errorformat -name option
-        lines: Tool output lines
+        lines: Tool output lines (may contain ANSI codes)
 
     Yields:
-        Null-terminated block chunks
+        Null-terminated block chunks (with ANSI codes preserved)
     """
-    for entry in run_errorformat(tool, lines):
+    # Build mapping from stripped lines to original (with ANSI) while streaming
+    stripped_to_original: dict[str, str] = {}
+
+    def strip_and_track(lines: Iterable[str]) -> Iterator[str]:
+        """Strip ANSI codes and track mapping while streaming."""
+        for line in lines:
+            stripped = strip_ansi(line)
+            stripped_to_original[stripped.rstrip("\n")] = line.rstrip("\n")
+            yield stripped
+
+    # Parse with errorformat using stripped lines
+    for entry in run_errorformat(tool, strip_and_track(lines)):
+        # Restore original colored lines from mapping
+        entry.lines = [
+            stripped_to_original.get(line, line) for line in entry.lines
+        ]
         yield format_block_from_entry(entry)

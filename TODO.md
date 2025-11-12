@@ -35,6 +35,13 @@
 
   **fzf config**: `--delimiter=\x1f --with-nth=6`
 
+- **Errorformat line matching**: Current implementation uses dict mapping from
+  stripped lines to original ANSI lines. This fails if duplicate stripped lines
+  exist. Implement proper matching algorithm that handles:
+  - Errorformat may drop invalid lines (but never adds lines)
+  - Match ASCII output lines to original ANSI input lines sequentially
+  - Simple forward-scan algorithm sufficient (no full diff needed)
+
 - Configurable editor commands
 
 - QA[high]:Test editors with CLI integration. (Already tested code, surf,

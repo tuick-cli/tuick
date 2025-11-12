@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from tuick.ansi import strip_ansi
 from tuick.parser import (
     BlockSplitter,
     FileLocation,
@@ -12,7 +13,6 @@ from tuick.parser import (
     extract_location_str,
     get_location,
     split_blocks,
-    strip_ansi,
 )
 
 

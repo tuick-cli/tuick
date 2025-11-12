@@ -8,7 +8,7 @@ class UnknownToolError(KeyError):
 
 
 # Tools using errorformat built-in patterns (-name=tool)
-BUILTIN_TOOLS: set[str] = set()
+BUILTIN_TOOLS: set[str] = {"flake8"}
 
 # Custom errorformat patterns for tools without built-in support
 CUSTOM_PATTERNS: dict[str, list[str]] = {}

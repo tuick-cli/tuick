@@ -8,8 +8,8 @@
 3. **Validate**: Run `just agent` before commit
 4. **Update TODO.md**: Remove completed tasks, add new tasks identified during
    implementation
-5. **Retrospective**: Review session feedback when user requests, identify
-   reusable patterns for AGENTS.md
+5. **Retrospective**: Review session feedback BEFORE commit, identify reusable
+   patterns for AGENTS.md
 6. **Commit**: Short informative message with gitmoji
 
 ## Project Rules
@@ -73,6 +73,10 @@
 - Implementation details belong in comments, not docstrings
 - Complexity suppressions: complexity errors (C901, PLR0912, PLR0915) can be
   suppressed with noqa if a refactoring task is added to TODO.md
+- Streaming: Never buffer entire input in memory when processing iterables.
+  Process line-by-line, yield results incrementally. Use generator functions,
+  not list() calls that force materialization. MUST maintain streaming:
+  consume one item, process, yield result, repeat.
 
 ### Python
 
@@ -132,6 +136,9 @@
   one test. Separate tests should test different behaviors, not just different
   inputs. Don't write tests for trivial variations or CLI usage errors.
 - Read error messages: they contain hints or directions
+- Real tool output: Use actual tool output for test data, not invented examples.
+  Run the tool (with various flags/modes) to capture real output. Verify tool
+  capabilities (e.g., check errorformat -list) before assuming support.
 - Never guess at fixes: get proper diagnostics (tracebacks, error output) before
   fixing. If error output is unclear, add logging or error handlers first.
 - Verify before fixing: When a bug is described in TODO.md or elsewhere, verify
