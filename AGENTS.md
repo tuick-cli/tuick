@@ -8,8 +8,8 @@
 3. **Validate**: Run `just agent` before commit
 4. **Update TODO.md**: Remove completed tasks, add new tasks identified during
    implementation
-5. **Retrospective**: Review session feedback BEFORE commit, identify reusable
-   patterns for AGENTS.md
+5. **Retrospective**: MANDATORY before commit. Review session, identify
+   learnings, update AGENTS.md if needed. DO NOT SKIP.
 6. **Commit**: Short informative message with gitmoji
 
 ## Project Rules
@@ -321,3 +321,7 @@
 - Better than repeatedly looking up or guessing API behavior
 - Format: tables, concise descriptions, common patterns
 - Example: `docs/reference-subprocess.md` for Python subprocess module
+- **When integrating external tools**: Create or read reference documentation
+  BEFORE designing interfaces. Verify actual tool behavior (argument passing,
+  quoting, field substitution, etc.) rather than assuming. Incorrect
+  assumptions lead to redesign work.

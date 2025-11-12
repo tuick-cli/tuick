@@ -43,8 +43,7 @@ from tuick.errorformat import (
 from tuick.fzf import FzfUserInterface, open_fzf_process
 from tuick.monitor import MonitorThread
 from tuick.parser import (
-    FileLocationNotFoundError,
-    get_location,
+    FileLocation,
     split_blocks_auto,
 )
 from tuick.reload_socket import ReloadSocketServer
@@ -69,8 +68,8 @@ def main(  # noqa: PLR0913, C901, PLR0912
     reload: bool = typer.Option(
         False, "--reload", help="Internal: run command and output blocks"
     ),
-    select: str = typer.Option(
-        "", "--select", help="Internal: open editor at error location"
+    select: bool = typer.Option(
+        False, "--select", help="Internal: open editor at error location"
     ),
     start: bool = typer.Option(
         False, "--start", help="Internal: notify fzf port to parent process"
@@ -113,7 +112,7 @@ def main(  # noqa: PLR0913, C901, PLR0912
         if reload:
             reload_command(command)
         elif select:
-            select_command(select)
+            select_command(command)
         elif start:
             start_command()
         elif message:
@@ -412,13 +411,33 @@ def reload_command(command: list[str]) -> None:
         raise
 
 
-def select_command(selection: str) -> None:
-    """Display the selected error in the text editor."""
-    try:
-        location = get_location(selection)
-    except FileLocationNotFoundError:
-        print_warning("No location found:", repr(selection))
+def select_command(fields: list[str]) -> None:
+    """Display the selected error in the text editor.
+
+    Args:
+        fields: List of 5 fields: [file, line, col, end-line, end-col]
+    """
+    # Expect 5 fields from fzf: file, line, col, end-line, end-col
+    if len(fields) < 5:
+        print_warning("Invalid selection format:", repr(fields))
         return
+
+    file_path, line_str, col_str = fields[0], fields[1], fields[2]
+
+    # Empty file means no location (informational block)
+    if not file_path:
+        print_verbose("No location in selection (informational block)")
+        return
+
+    # Parse line and column
+    try:
+        line = int(line_str) if line_str else None
+        col = int(col_str) if col_str else None
+    except ValueError:
+        print_warning("Invalid line/col format:", repr(fields))
+        return
+
+    location = FileLocation(path=file_path, row=line, column=col)
 
     # Get editor from environment
     editor = get_editor_from_env()

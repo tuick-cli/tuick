@@ -27,7 +27,7 @@
      - Reuses list_command infrastructure via top_mode parameter
   8. ✓ Update default command (check TUICK_PORT)
   9. ✓ Update fzf integration (delimiter config)
-  10. Update select_command (receive fields from fzf)
+  10. ✓ Update select_command (receive fields from fzf)
   11. Update reload_command (propagate mode/format through callbacks)
       - Critical: reload_command already uses split_blocks() via _process_output_and_yield_raw()
       - Errorformat integration in split_blocks() works for both list and reload

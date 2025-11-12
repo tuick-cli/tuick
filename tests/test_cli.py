@@ -298,7 +298,7 @@ def test_cli_select_plain(console_out: ConsoleFixture) -> None:
             instance=True,
         )
         mock_run.return_value.returncode = 0
-        args = app, ["--select", "src/test.py:10:5: error: Test"]
+        args = app, ["--select", "src/test.py", "10", "5", "", ""]
         result = runner.invoke(*args)
         assert result.exit_code == 0
         assert console_out.getvalue() == ""
@@ -316,11 +316,11 @@ def test_cli_select_verbose(console_out: ConsoleFixture) -> None:
             subprocess.CompletedProcess, instance=True
         )
         mock_run.return_value.returncode = 0
-        args = app, ["--verbose", "--select", "src/test.py:10:5: error: Test"]
+        args = app, ["--verbose", "--select", "src/test.py", "10", "5", "", ""]
         result = runner.invoke(*args)
         assert result.exit_code == 0
         expected = (
-            "> tuick --verbose --select 'src/test.py:10:5: error: Test'\n"
+            "> tuick --verbose --select src/test.py 10 5 '' ''\n"
             "  $ vi +10 '+normal! 5l' src/test.py\n"
         )
         assert console_out.getvalue() == expected
@@ -340,7 +340,7 @@ def test_cli_select_error(console_out: ConsoleFixture) -> None:
             subprocess.CompletedProcess, instance=True
         )
         mock_run.return_value.returncode = 1
-        args = app, ["--select", "src/test.py:10:5: error: Test"]
+        args = app, ["--select", "src/test.py", "10", "5", "", ""]
         result = runner.invoke(*args)
         assert result.exit_code == 1
         mock_run.assert_called_once_with(ANY, check=True)
@@ -348,11 +348,9 @@ def test_cli_select_error(console_out: ConsoleFixture) -> None:
 
 
 def test_cli_select_no_location_found(console_out: ConsoleFixture) -> None:
-    """--select with no location does nothing."""
+    """--select with no location (empty file) does nothing."""
     with patch("tuick.cli.subprocess.run") as mock_run:
-        result = runner.invoke(
-            app, ["--select", "plain text without location"]
-        )
+        result = runner.invoke(app, ["--select", "", "", "", "", ""])
         assert result.exit_code == 0
         assert console_out.getvalue() == ""
         # Verify editor was not called
@@ -360,13 +358,15 @@ def test_cli_select_no_location_found(console_out: ConsoleFixture) -> None:
 
 
 def test_cli_select_verbose_no_location(console_out: ConsoleFixture) -> None:
-    """--verbose --select with no location prints a message with input."""
+    """--verbose --select with no location prints a message."""
     with patch("tuick.cli.subprocess.run") as mock_run:
-        result = runner.invoke(app, ["--select", "plain text", "--verbose"])
+        result = runner.invoke(
+            app, ["--verbose", "--select", "", "", "", "", ""]
+        )
         assert result.exit_code == 0
         assert console_out.getvalue() == dedent("""\
-            > tuick --select 'plain text' --verbose
-            No location found: 'plain text'
+            > tuick --verbose --select '' '' '' '' ''
+            No location in selection (informational block)
         """)
         # Verify editor was not called
         mock_run.assert_not_called()
