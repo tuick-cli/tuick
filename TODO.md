@@ -17,7 +17,9 @@
      - Pattern registries: BUILTIN_TOOLS, CUSTOM_PATTERNS, OVERRIDE_PATTERNS
      - Implemented for mypy with custom patterns
      - TODO: Add integration test for built-in pattern path (e.g., ruff)
-  5. Block assembly with markers (\x02, \x03)
+  5. ✓ Block assembly with markers (\x02, \x03)
+     - Added wrap_blocks_with_markers() for nested mode
+     - Updated test helpers to use null-terminated blocks
   6. Implement format_command (nested mode, check TUICK_NESTED)
   7. Implement top_command (orchestrator, two-layer parsing)
   8. Update default command (check TUICK_NESTED)
@@ -31,7 +33,7 @@
 
   **Block format**: `file\x1fline\x1fcol\x1fend-line\x1fend-col\x1fcontent\0`
 
-  **Nested output**: `\x02block1\0block2\x03` (no trailing \0)
+  **Nested output**: `\x02block1\0block2\0\x03` (null-terminated blocks)
 
   **fzf config**: `--delimiter=\x1f --with-nth=6`
 

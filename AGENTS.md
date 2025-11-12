@@ -58,6 +58,9 @@
 
 ### General
 
+- Avoid confusing names: module/file names must be clearly distinct. Don't use
+  names differing by one character (errorformat.py vs errorformats.py). Use
+  descriptive, distinct names (tool_registry.py vs errorformat.py).
 - Validate input once when entering system, handle errors explicitly
 - Include docstrings for functions/modules
 - Limit lines to 79 columns
@@ -66,6 +69,8 @@
 - All other things being equal, prefer code that takes fewer lines
 - Consider intermediate variables where they make code more compact
 - Do not write trivial docstrings, except for important public objects
+- Helper function docstrings must not exceed implementation length. One-line
+  docstrings for simple helpers. Detailed Args/Returns only for public APIs.
 - Preserve compact notation for function signatures: keep on one line when
   possible. For function calls with long arguments, use intermediate variables
   to prevent wrapping and reduce vertical space waste.
@@ -147,9 +152,11 @@
   accurate without verification.
 - Spec mocks: always use create_autospec() or patch(autospec=True), do not use
   plain Mock or MagicMock
-- Do not mock the hell out of things. When testing the happy path of a single
-  behavior, prefer integration tests. Use unit tests with mocking when testing
-  complex behavior with multiple inputs.
+- Do not mock the hell out of things. When testing a single unit of behavior,
+  prefer integration tests over isolated unit tests. Integration tests provide
+  better confidence with less maintenance. Use unit tests with mocking only
+  when testing complex behavior with multiple edge cases requiring controlled
+  inputs.
 - Checking complex structures:
   - When comparing complex structures (lists, dicts, dataclasses) in tests
   - Do not assert comparisons to the value of individual members
@@ -206,7 +213,13 @@
 ## Version Control
 
 - Commit with short informative messages
-- Use gitmojis (https://gitmoji.dev) as unicode
+- Use gitmojis (https://gitmoji.dev) as unicode. Common ones:
+  - 🚚 move/rename files or folders
+  - ♻️ refactor code
+  - ✨ introduce new features
+  - 🐛 fix a bug
+  - 📝 add or update documentation
+  - ✅ add, update, or pass tests
 - Do not include complete content in commit messages - summarize changes
   concisely
 - `just agent` before every commit, to run all checks and tests
