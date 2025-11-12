@@ -29,6 +29,9 @@ KNOWN_TOOLS: set[str] = (
     BUILTIN_TOOLS | set(CUSTOM_PATTERNS) | set(OVERRIDE_PATTERNS)
 )
 
+# Build systems that orchestrate nested tuick commands
+BUILD_SYSTEMS: set[str] = {"make", "just", "cmake", "ninja"}
+
 
 def detect_tool(command: list[str]) -> str:
     """Extract tool name from command, stripping path prefix if present."""
@@ -38,3 +41,8 @@ def detect_tool(command: list[str]) -> str:
 def is_known_tool(tool: str) -> bool:
     """Check if tool has errorformat support."""
     return tool in KNOWN_TOOLS
+
+
+def is_build_system(tool: str) -> bool:
+    """Check if tool is a known build system."""
+    return tool in BUILD_SYSTEMS
