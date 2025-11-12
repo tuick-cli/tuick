@@ -503,15 +503,15 @@ def format_blocks(blocks: list[tuple[str, str, str, str]]) -> str:
     return "".join(format_block(*b) for b in blocks)
 
 
-@pytest.mark.xfail(reason="errorformat integration not implemented")
+@pytest.mark.xfail(reason="Task 9: fzf delimiter config not implemented")
 def test_errorformat_simple_mode() -> None:
-    """Simple mode: ruff → errorformat JSONL → fzf with field delimiters."""
+    """Simple mode: flake8 → errorformat JSONL → fzf with field delimiters."""
     sequence: list[str] = []
-    ruff_lines = [
+    flake8_lines = [
         "src/a.py:10:5: F401 unused\n",
         "src/b.py:15:1: E302\n",
     ]
-    cmd_proc = make_cmd_proc(sequence, "ruff", ruff_lines)
+    cmd_proc = make_cmd_proc(sequence, "flake8", flake8_lines)
     ef_jsonl = [
         '{"filename":"src/a.py","lnum":10,"col":5,'
         '"lines":["src/a.py:10:5: F401 unused"]}\n',
@@ -528,10 +528,10 @@ def test_errorformat_simple_mode() -> None:
         ) as mock,
         patch("tuick.cli.MonitorThread"),
     ):
-        runner.invoke(app, ["--", "ruff", "check"])
+        runner.invoke(app, ["--", "flake8", "src/"])
 
-    assert mock.call_args_list[0].args[0] == ["ruff", "check"]
-    ef_args = ["errorformat", "-w=jsonl", "-name=ruff"]
+    assert mock.call_args_list[0].args[0] == ["flake8", "src/"]
+    ef_args = ["errorformat", "-w=jsonl", "-name=flake8"]
     assert mock.call_args_list[1].args[0] == ef_args
     fzf_cmd = " ".join(mock.call_args_list[2].args[0])
     assert "--delimiter=\x1f" in fzf_cmd

@@ -25,7 +25,7 @@
      - Auto-detect build systems in default routing
      - Two-layer parsing with split_at_markers()
      - Reuses list_command infrastructure via top_mode parameter
-  8. Update default command (check TUICK_PORT)
+  8. ✓ Update default command (check TUICK_PORT)
   9. Update fzf integration (delimiter config)
   10. Update select_command (receive fields from fzf)
   11. Update reload_command (propagate mode/format through callbacks)
@@ -57,8 +57,8 @@
   - Match ASCII output lines to original ANSI input lines sequentially
   - Simple forward-scan algorithm sufficient (no full diff needed)
 
-- REF[med]: Refactor main() to reduce complexity (C901: 11 > 10). Extract
-  routing logic or use pattern matching.
+- REF[med]: Refactor main() to reduce complexity (C901, PLR0912: 17 > 12).
+  Extract routing logic or use pattern matching.
 
 - REF[med]: Refactor list_command() to reduce complexity (C901: 11 > 10).
   Extract setup/teardown or use helper functions.

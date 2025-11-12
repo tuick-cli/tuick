@@ -64,7 +64,7 @@ class ProcessTerminatedError(Exception):
 
 
 @app.command()
-def main(  # noqa: PLR0913, C901
+def main(  # noqa: PLR0913, C901, PLR0912
     command: list[str] = typer.Argument(default_factory=list),
     reload: bool = typer.Option(
         False, "--reload", help="Internal: run command and output blocks"
@@ -123,12 +123,33 @@ def main(  # noqa: PLR0913, C901
         elif top:
             top_command(command, verbose=verbose)
         else:
-            # Auto-detect build systems and use top mode
-            tool = detect_tool(command)
-            if is_build_system(tool):
-                list_command(command, verbose=verbose, top_mode=True)
+            # Check if we're being called from a top-mode orchestrator
+            tuick_port = os.environ.get("TUICK_PORT")
+            if tuick_port:
+                # Output structured blocks (nested behavior)
+                tool = detect_tool(command)
+                if not is_known_tool(tool):
+                    msg = f"Tool '{tool}' not supported."
+                    print_error(None, msg)
+                    raise typer.Exit(1)
+
+                try:
+                    cmd_proc = _create_command_process(command)
+                    with cmd_proc:
+                        assert cmd_proc.stdout is not None
+                        blocks = parse_with_errorformat(tool, cmd_proc.stdout)
+                        for chunk in wrap_blocks_with_markers(blocks):
+                            _write_block_and_maybe_flush(sys.stdout, chunk)
+                except ErrorformatNotFoundError as error:
+                    print_error(None, str(error))
+                    raise typer.Exit(1) from error
             else:
-                list_command(command, verbose=verbose)
+                # Auto-detect build systems and use top mode
+                tool = detect_tool(command)
+                if is_build_system(tool):
+                    list_command(command, verbose=verbose, top_mode=True)
+                else:
+                    list_command(command, verbose=verbose)
 
 
 class CallbackCommands:

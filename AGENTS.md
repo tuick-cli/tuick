@@ -155,7 +155,9 @@
 - Read error messages: they contain hints or directions
 - Real tool output: Use actual tool output for test data, not invented examples.
   Run the tool (with various flags/modes) to capture real output. Verify tool
-  capabilities (e.g., check errorformat -list) before assuming support.
+  capabilities (e.g., check errorformat -list) before assuming support. Check
+  tool registries (BUILTIN_TOOLS, CUSTOM_PATTERNS, OVERRIDE_PATTERNS) before
+  writing integration tests.
 - Test data reuse: NEVER duplicate test data. Extract to module-level constants
   and import them. If one test file already has the data, import from there. If
   data format is inconvenient, preprocess/transform, but do not copy-paste.
@@ -187,6 +189,11 @@
 - xfail for TDD of registries: when building registries that start empty and
   grow, write xfail test for first entry to be added, passing test for unknown
   entries
+- xfail precision: When marking tests xfail during incremental implementation,
+  reference the specific task number or feature name. Use "Task N: reason"
+  format so it's clear when to remove the marker. Example:
+  `@pytest.mark.xfail(reason="Task 9: fzf delimiter config not implemented")`
+  not generic "feature not ready".
 
 ### Test Infrastructure
 
