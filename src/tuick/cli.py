@@ -34,6 +34,11 @@ from tuick.editor import (
     get_editor_command,
     get_editor_from_env,
 )
+from tuick.errorformat import (
+    ErrorformatNotFoundError,
+    parse_with_errorformat,
+    wrap_blocks_with_markers,
+)
 from tuick.fzf import FzfUserInterface, open_fzf_process
 from tuick.monitor import MonitorThread
 from tuick.parser import (
@@ -43,6 +48,7 @@ from tuick.parser import (
 )
 from tuick.reload_socket import ReloadSocketServer
 from tuick.shell import quote_command
+from tuick.tool_registry import detect_tool, is_known_tool
 
 app = typer.Typer()
 
@@ -399,15 +405,29 @@ def format_command(command: list[str]) -> None:
     tuick_nested = os.environ.get("TUICK_NESTED")
 
     if not tuick_nested:
-        # Passthrough mode: just run command without capturing
+        # Passthrough mode: run command without capturing output
         print_command(command)
-        result = subprocess.run(command, check=False)
-        sys.exit(result.returncode)
+        proc = subprocess.Popen(command)
+        proc.wait()
+        sys.exit(proc.returncode)
 
-    # TODO: Implement structured block output with errorformat
-    # This will be implemented in step 4-6 of the plan
-    print_error(None, "Structured output not yet implemented")
-    raise typer.Exit(1)
+    # Nested mode: parse with errorformat and output structured blocks
+    tool = detect_tool(command)
+    if not is_known_tool(tool):
+        msg = f"Tool '{tool}' not supported. Use --format with known tools."
+        print_error(None, msg)
+        raise typer.Exit(1)
+
+    try:
+        cmd_proc = _create_command_process(command)
+        with cmd_proc:
+            assert cmd_proc.stdout is not None
+            blocks = parse_with_errorformat(tool, cmd_proc.stdout)
+            for chunk in wrap_blocks_with_markers(blocks):
+                _write_block_and_maybe_flush(sys.stdout, chunk)
+    except ErrorformatNotFoundError as error:
+        print_error(None, str(error))
+        raise typer.Exit(1) from error
 
 
 def top_command(_command: list[str]) -> None:

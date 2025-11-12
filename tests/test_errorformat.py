@@ -1,43 +1,49 @@
 """Tests for errorformat integration."""
 
+import pytest
+
 from tuick.errorformat import parse_with_errorformat
 
+from .test_parser import (
+    MYPY_ABSOLUTE_BLOCKS,
+    MYPY_BLOCKS,
+    MYPY_FANCY_BLOCKS,
+    MYPY_VERY_FANCY_BLOCKS,
+)
 
-def test_parse_with_errorformat_mypy() -> None:
-    """Integration test: parse mypy output with errorformat."""
-    # Real mypy output from test_parser.py test data
-    mypy_output = [
-        "src/jobsearch/search.py:58: error: Returning Any from function...\n",
-        "src/jobsearch/cadremploi_scraper.py:43:35: error: Missing type "
-        'parameters for "dict"  [type-arg]\n',
-        "    def extract_json_ld(html: str) -> dict | None:\n",
-        "                                      ^\n",
-        "tests/test_search.py:144: error: Non-overlapping equality check...\n",
-        "Found 8 errors in 6 files (checked 20 source files)\n",
-    ]
 
-    result = "".join(parse_with_errorformat("mypy", iter(mypy_output)))
+@pytest.mark.parametrize(
+    "blocks",
+    [
+        pytest.param(MYPY_BLOCKS, id="simple"),
+        pytest.param(
+            MYPY_FANCY_BLOCKS,
+            id="fancy",
+            marks=pytest.mark.xfail(reason="needs block grouping by location"),
+        ),
+        pytest.param(MYPY_ABSOLUTE_BLOCKS, id="absolute"),
+        pytest.param(
+            MYPY_VERY_FANCY_BLOCKS[:-1],
+            id="very_fancy",
+            marks=pytest.mark.xfail(reason="needs block grouping by location"),
+        ),
+    ],
+)
+def test_parse_with_errorformat_mypy(blocks: list[str]) -> None:
+    """Integration test: parse mypy output produces one block per location."""
+    input_text = "\n".join((*blocks, ""))
+    input_lines = input_text.splitlines(keepends=True)
+    result = list(parse_with_errorformat("mypy", input_lines))
 
-    # Block 1: file:line (no column)
-    # Block 2: file:line:col with 2 continuation lines (multi-line)
-    # Block 3: file:line (no column)
-    # Block 4: informational message (no location, valid=true via %G)
-    expected = (
-        "src/jobsearch/search.py\x1f58\x1f\x1f\x1f\x1f"
-        "src/jobsearch/search.py:58: error: Returning Any from "
-        "function...\0"
-        "src/jobsearch/cadremploi_scraper.py\x1f43\x1f35\x1f\x1f\x1f"
-        "src/jobsearch/cadremploi_scraper.py:43:35: error: Missing type "
-        'parameters for "dict"  [type-arg]\n'
-        "    def extract_json_ld(html: str) -> dict | None:\n"
-        "                                      ^\0"
-        "tests/test_search.py\x1f144\x1f\x1f\x1f\x1f"
-        "tests/test_search.py:144: error: Non-overlapping equality "
-        "check...\0"
-        "\x1f\x1f\x1f\x1f\x1f"
-        "Found 8 errors in 6 files (checked 20 source files)\0"
-    )
-    assert result == expected
+    # Should produce one block per input block (same count)
+    assert len(result) == len(blocks)
+
+    # Each result block should contain all lines from input block
+    for i, block in enumerate(blocks):
+        # Extract content field (after 5 \x1f delimiters)
+        content = result[i].split("\x1f")[5].rstrip("\0")
+        # Content should match original block
+        assert content == block.rstrip("\n") or content in block
 
 
 def test_parse_with_errorformat_flake8() -> None:

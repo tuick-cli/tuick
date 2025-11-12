@@ -4,6 +4,7 @@ import functools
 import io
 import socket
 import subprocess
+import sys
 from io import StringIO
 from textwrap import dedent
 from typing import TYPE_CHECKING, Any
@@ -14,6 +15,8 @@ import typer.testing
 
 from tuick.cli import app
 from tuick.reload_socket import ReloadSocketServer
+
+from .test_parser import MYPY_BLOCKS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -587,36 +590,42 @@ def test_errorformat_top_mode() -> None:
     assert "".join(writes) == expected
 
 
-@pytest.mark.xfail(reason="errorformat integration not implemented")
-def test_errorformat_format_passthrough(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_errorformat_format_passthrough() -> None:
     """Format mode without TUICK_NESTED: passthrough to stdout."""
     sequence: list[str] = []
-    ruff_lines = ["src/a.py:10:5: F401\n"]
-    cmd_proc = make_cmd_proc(sequence, "ruff", ruff_lines)
+    mypy_lines = [MYPY_BLOCKS[0] + "\n"]
+    cmd_proc = make_cmd_proc(sequence, "mypy", mypy_lines)
+
+    def write_and_wait() -> int:
+        """Simulate subprocess writing to stdout."""
+        for line in mypy_lines:
+            sys.stdout.write(line)
+        return 0
+
+    cmd_proc.wait.side_effect = lambda: write_and_wait()
 
     with (
         patch("tuick.cli.subprocess.Popen", side_effect=[cmd_proc]) as mock,
         patch.dict("os.environ", {}, clear=False),
     ):
-        runner.invoke(app, ["--format", "--", "ruff", "check"])
+        result = runner.invoke(app, ["--format", "--", "mypy", "src/"])
 
     assert mock.call_args_list[0].kwargs.get("stdout") != subprocess.PIPE
-    assert capsys.readouterr().out == "".join(ruff_lines)
+    assert result.stdout == "".join(mypy_lines)
 
 
-@pytest.mark.xfail(reason="errorformat integration not implemented")
 def test_errorformat_format_structured() -> None:
     r"""Format mode with TUICK_NESTED=1: output \x02blocks\x03."""
     sequence: list[str] = []
-    ruff_lines = ["src/a.py:10:5: F401\n", "src/b.py:15:1: E302\n"]
-    cmd_proc = make_cmd_proc(sequence, "ruff", ruff_lines)
+    mypy_lines = [MYPY_BLOCKS[0] + "\n", MYPY_BLOCKS[1] + "\n"]
+    cmd_proc = make_cmd_proc(sequence, "mypy", mypy_lines)
     ef_jsonl = [
-        '{"filename":"src/a.py","lnum":10,"col":5,'
-        '"lines":["src/a.py:10:5: F401"]}\n',
-        '{"filename":"src/b.py","lnum":15,"col":1,'
-        '"lines":["src/b.py:15:1: E302"]}\n',
+        '{"filename":"src/jobsearch/search.py","lnum":58,'
+        f'"lines":["{MYPY_BLOCKS[0]}"]'
+        "}\n",
+        '{"filename":"tests/test_search.py","lnum":144,'
+        f'"lines":["{MYPY_BLOCKS[1]}"]'
+        "}\n",
     ]
     ef_proc = make_errorformat_proc(sequence, ef_jsonl)
 
@@ -626,15 +635,15 @@ def test_errorformat_format_structured() -> None:
         ) as mock,
         patch.dict("os.environ", {"TUICK_NESTED": "1"}),
     ):
-        result = runner.invoke(app, ["--format", "--", "ruff", "check"])
+        result = runner.invoke(app, ["--format", "--", "mypy", "src/"])
 
     assert mock.call_args_list[1].kwargs["stdout"] == subprocess.PIPE
     expected = (
         "\x02"
         + format_blocks(
             [
-                ("src/a.py", "10", "5", "src/a.py:10:5: F401"),
-                ("src/b.py", "15", "1", "src/b.py:15:1: E302"),
+                ("src/jobsearch/search.py", "58", "", MYPY_BLOCKS[0]),
+                ("tests/test_search.py", "144", "", MYPY_BLOCKS[1]),
             ]
         )
         + "\x03"
@@ -642,11 +651,12 @@ def test_errorformat_format_structured() -> None:
     assert result.stdout == expected
 
 
-@pytest.mark.xfail(reason="format command with TUICK_NESTED not implemented")
-def test_errorformat_missing_shows_error() -> None:
+def test_errorformat_missing_shows_error(
+    console_out: ConsoleFixture,
+) -> None:
     """Show clear error when errorformat not installed and --format used."""
     sequence: list[str] = []
-    mypy_lines = ["src/test.py:10: error: Missing type\n"]
+    mypy_lines = [MYPY_BLOCKS[0] + "\n"]
     cmd_proc = make_cmd_proc(sequence, "mypy", mypy_lines)
 
     with (
@@ -657,5 +667,6 @@ def test_errorformat_missing_shows_error() -> None:
         result = runner.invoke(app, ["--format", "--", "mypy", "src/"])
 
     assert result.exit_code != 0
-    assert "errorformat not found" in result.stdout
-    assert "go install" in result.stdout
+    output = console_out.getvalue()
+    assert "errorformat not found" in output
+    assert "go install" in output

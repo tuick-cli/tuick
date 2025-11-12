@@ -20,7 +20,7 @@
   5. ✓ Block assembly with markers (\x02, \x03)
      - Added wrap_blocks_with_markers() for nested mode
      - Updated test helpers to use null-terminated blocks
-  6. Implement format_command (nested mode, check TUICK_NESTED)
+  6. ✓ Implement format_command (nested mode, check TUICK_NESTED)
   7. Implement top_command (orchestrator, two-layer parsing)
   8. Update default command (check TUICK_NESTED)
   9. Update fzf integration (delimiter config)
@@ -36,6 +36,16 @@
   **Nested output**: `\x02block1\0block2\0\x03` (null-terminated blocks)
 
   **fzf config**: `--delimiter=\x1f --with-nth=6`
+
+- **Group errorformat entries by location**: errorformat splits multi-line
+  blocks into separate entries (mypy note lines, continuation lines). Add
+  post-processing in parse_with_errorformat() to group entries by location.
+  Attach note: lines (no line number) to next error at same file. See
+  test_parse_with_errorformat_mypy[fancy/very_fancy] xfail tests.
+
+- **Port existing parser patterns to errorformat**: parser.py contains regex
+  patterns for ruff, pytest, mypy notes, etc. Port these to errorformat
+  patterns in tool_registry.py (BUILTIN_TOOLS or CUSTOM_PATTERNS).
 
 - **Errorformat line matching**: Current implementation uses dict mapping from
   stripped lines to original ANSI lines. This fails if duplicate stripped lines

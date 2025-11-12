@@ -144,6 +144,9 @@
 - Real tool output: Use actual tool output for test data, not invented examples.
   Run the tool (with various flags/modes) to capture real output. Verify tool
   capabilities (e.g., check errorformat -list) before assuming support.
+- Test data reuse: NEVER duplicate test data. Extract to module-level constants
+  and import them. If one test file already has the data, import from there. If
+  data format is inconvenient, preprocess/transform, but do not copy-paste.
 - Never guess at fixes: get proper diagnostics (tracebacks, error output) before
   fixing. If error output is unclear, add logging or error handlers first.
 - Verify before fixing: When a bug is described in TODO.md or elsewhere, verify
