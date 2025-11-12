@@ -84,6 +84,22 @@
   comments. More Pythonic and makes intent explicit.
 - Don't start unittest docstrings with "Test"
 
+### Type Hints
+
+- TYPE_CHECKING blocks: Import types only used in annotations under
+  `if typing.TYPE_CHECKING:` to avoid runtime overhead
+- Use most general type that works: `Iterable` over `Iterator` when only
+  iteration needed
+- Missing values: Use `None` for missing/optional data, not `0` or `''`
+
+### Function Design
+
+- newfunc: Write new functions instead of adding optional parameters for
+  alternate behavior paths
+- If dispatch is needed, use polymorphism or explicit dispatch functions
+- Example: `split_blocks_auto()` dispatches to `split_blocks()` or
+  `split_blocks_errorformat()` based on tool
+
 ## Testing
 
 ### Test Driven Development (TDD)
@@ -143,6 +159,17 @@
   grow, write xfail test for first entry to be added, passing test for unknown
   entries
 
+### Test Infrastructure
+
+- testutil: Create utilities for repeated mocking patterns, but at the right
+  abstraction level
+- testclarity: Test infrastructure must not obscure test intent. If mocking
+  setup dominates the test, extract to utility
+- testevent: Track meaningful system events in tests, not language-level
+  details (e.g., process creation/termination, not `__enter__`)
+- Example: `patch_popen(sequence, procs)` encapsulates both patching and proc
+  sequencing
+
 ### Test Synchronization
 
 - testsync: Multithreaded tests must use proper synchronization.
@@ -173,6 +200,8 @@
 
 - Commit with short informative messages
 - Use gitmojis (https://gitmoji.dev) as unicode
+- Do not include complete content in commit messages - summarize changes
+  concisely
 - `just agent` before every commit, to run all checks and tests
 - Update TODO.md before commit: remove completed tasks, add new tasks identified
   during implementation
@@ -238,3 +267,12 @@
 - Update when: major architectural changes, new modules, data flow changes
 - Keep concise: focus on structure and data flow, not implementation details
 - Update atomically: include map updates in feature commits, not separately
+
+### Reference Documentation
+
+- Create token-efficient API references for external tools/libraries used
+  frequently
+- Store in `docs/reference-*.md` for agent and human use
+- Better than repeatedly looking up or guessing API behavior
+- Format: tables, concise descriptions, common patterns
+- Example: `docs/reference-subprocess.md` for Python subprocess module

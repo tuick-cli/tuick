@@ -49,6 +49,7 @@ ignore = [
     "D203",     # no blank line required before class docstring
     "D213",     # multi-line docstring summary should start at the first line
     "S603",     # subprocess call
+    "S607",     # partial executable path (tuick runs user commands from PATH)
     "PLR2004",  # Magic value used in comparison
     "EM",       # Error message can be duplicated in traceback, no problem.
     "TD002",    # missing-todo-author

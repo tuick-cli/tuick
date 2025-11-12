@@ -95,19 +95,41 @@ def make_errorformat_proc(
     sequence: list[str], jsonl_lines: list[str], returncode: int = 0
 ) -> Mock:
     """Create mocked errorformat subprocess with JSONL output."""
+    proc: Mock = create_autospec(subprocess.Popen, instance=True)
+    proc.returncode = returncode
+    proc.stdin = create_autospec(io.TextIOWrapper, instance=True)
+
+    # Support both communicate() and stdout iteration
+    stdout_text = "".join(jsonl_lines)
+    proc.communicate.return_value = (stdout_text, "")
 
     def stdout_iter() -> Iterator[str]:
         for line in jsonl_lines:
             sequence.append(f"errorformat:{line[:50]}")
             yield line
 
-    proc: Mock = create_autospec(subprocess.Popen, instance=True)
-    proc.returncode = returncode
     proc.stdout = stdout_iter()
-    proc.stdin = create_autospec(io.TextIOWrapper, instance=True)
+
     proc.__enter__.side_effect = track(sequence, "errorformat:enter", ret=proc)
     proc.__exit__.side_effect = track(sequence, "errorformat:exit", ret=False)
     return proc
+
+
+def patch_popen(sequence: list[str], procs: list[Mock]) -> Any:  # noqa: ANN401
+    """Patch subprocess.Popen to return procs in sequence, tracking 'popen'.
+
+    Returns a context manager that patches subprocess.Popen.
+    """
+    index = 0
+
+    def popen_factory(*args, **kwargs):  # noqa: ANN002, ANN003
+        nonlocal index
+        sequence.append("popen")
+        proc = procs[index]
+        index += 1
+        return proc
+
+    return patch("tuick.cli.subprocess.Popen", side_effect=popen_factory)
 
 
 def test_cli_default_launches_fzf() -> None:
@@ -210,29 +232,47 @@ def test_cli_reload_option(console_out: ConsoleFixture) -> None:
     server.start()
     port = server.server_address[1]
 
-    mock_process = create_autospec(subprocess.Popen, instance=True)
-    mock_process.stdout = iter(["src/test.py:1: error: Test\n"])
-    mock_process.returncode = 1
-    mock_process.__enter__.side_effect = track(
-        sequence, "popen", ret=mock_process
+    # Mock mypy command subprocess
+    mypy_proc = make_cmd_proc(
+        sequence, "mypy", ["src/test.py:1: error: Test\n"], returncode=1
     )
-    mock_process.__exit__.side_effect = track(sequence, "exit", ret=False)
+    # Mock errorformat subprocess
+    ef_jsonl = [
+        '{"filename":"src/test.py","lnum":1,"col":0,'
+        '"lines":["src/test.py:1: error: Test"],"text":"Test",'
+        '"type":"E","valid":true}\n'
+    ]
+    ef_proc = make_errorformat_proc(sequence, ef_jsonl)
 
     try:
         env = {"TUICK_PORT": str(port), "TUICK_API_KEY": api_key}
 
         with (
-            patch("tuick.cli.subprocess.Popen", return_value=mock_process),
+            patch_popen(sequence, [mypy_proc, ef_proc]),
             patch.dict("os.environ", env),
         ):
             result = runner.invoke(
                 app, ["--reload", "-v", "--", "mypy", "src/"]
             )
         assert result.exit_code == 0
-        assert result.stdout == "src/test.py:1: error: Test"
+        # Exact block format: file\x1fline\x1fcol\x1f\x1f\x1ftext\0
+        expected = (
+            "src/test.py\x1f1\x1f\x1f\x1f\x1fsrc/test.py:1: error: Test\0"
+        )
+        assert result.stdout == expected
         assert "> Terminating reload command\n" in console_out.getvalue()
-        # Verify sequence: terminate → wait → popen
-        assert sequence == ["terminate", "wait", "popen", "exit"]
+        # Exact sequence: terminate → wait → popen (mypy) → mypy:enter →
+        # popen (errorformat) → mypy output → mypy:exit
+        expected_seq = [
+            "terminate",
+            "wait",
+            "popen",
+            "mypy:enter",
+            "popen",
+            "mypy:src/test.py:1: error: Test",
+            "mypy:exit",
+        ]
+        assert sequence == expected_seq
     finally:
         # Shutdown server
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -344,14 +384,22 @@ def test_cli_abort_after_initial_load_prints_output(
     """On fzf abort (exit 130) after initial load, print initial output."""
     sequence: list[str] = []
 
-    # Command completes before fzf starts
-    cmd_proc = make_cmd_proc(
-        sequence, "cmd", ["initial.py:1: error\n", "initial.py:2: warning\n"]
+    # Mock mypy command subprocess
+    mypy_proc = make_cmd_proc(
+        sequence, "mypy", ["initial.py:1: error\n", "initial.py:2: warning\n"]
     )
+    # Mock errorformat subprocess
+    ef_jsonl = [
+        '{"filename":"initial.py","lnum":1,"col":0,'
+        '"lines":["initial.py:1: error"]}\n',
+        '{"filename":"initial.py","lnum":2,"col":0,'
+        '"lines":["initial.py:2: warning"]}\n',
+    ]
+    ef_proc = make_errorformat_proc(sequence, ef_jsonl)
     fzf_proc = make_fzf_proc(sequence, returncode=130)  # User abort
 
     with (
-        patch("tuick.cli.subprocess.Popen", side_effect=[cmd_proc, fzf_proc]),
+        patch_popen(sequence, [mypy_proc, ef_proc, fzf_proc]),
         patch("tuick.cli.MonitorThread"),
     ):
         result = runner.invoke(app, ["--", "mypy", "src/"])
@@ -362,8 +410,8 @@ def test_cli_abort_after_initial_load_prints_output(
     assert "initial.py:1: error" in result.stdout
     assert "initial.py:2: warning" in result.stdout
 
-    # Verify cmd was waited before fzf exit
-    assert sequence.index("cmd:wait") < sequence.index("fzf:exit")
+    # Verify mypy was waited before fzf exit
+    assert sequence.index("mypy:wait") < sequence.index("fzf:exit")
 
 
 @pytest.mark.xfail(reason="needs proper integration test")
@@ -592,3 +640,22 @@ def test_errorformat_format_structured() -> None:
         + "\x03"
     )
     assert result.stdout == expected
+
+
+@pytest.mark.xfail(reason="format command with TUICK_NESTED not implemented")
+def test_errorformat_missing_shows_error() -> None:
+    """Show clear error when errorformat not installed and --format used."""
+    sequence: list[str] = []
+    mypy_lines = ["src/test.py:10: error: Missing type\n"]
+    cmd_proc = make_cmd_proc(sequence, "mypy", mypy_lines)
+
+    with (
+        patch_popen(sequence, [cmd_proc]),
+        patch("tuick.errorformat.shutil.which", return_value=None),
+        patch.dict("os.environ", {"TUICK_NESTED": "1"}),
+    ):
+        result = runner.invoke(app, ["--format", "--", "mypy", "src/"])
+
+    assert result.exit_code != 0
+    assert "errorformat not found" in result.stdout
+    assert "go install" in result.stdout

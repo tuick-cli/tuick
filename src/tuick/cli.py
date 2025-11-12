@@ -36,7 +36,11 @@ from tuick.editor import (
 )
 from tuick.fzf import FzfUserInterface, open_fzf_process
 from tuick.monitor import MonitorThread
-from tuick.parser import FileLocationNotFoundError, get_location, split_blocks
+from tuick.parser import (
+    FileLocationNotFoundError,
+    get_location,
+    split_blocks_auto,
+)
 from tuick.reload_socket import ReloadSocketServer
 from tuick.shell import quote_command
 
@@ -180,7 +184,7 @@ def list_command(command: list[str], *, verbose: bool = False) -> None:
                 temp_file.write(line)
                 yield line
 
-        chunks = split_blocks(raw_and_split())
+        chunks = split_blocks_auto(command, raw_and_split())
 
         try:
             # Read first chunk to check if there's any output
@@ -259,7 +263,7 @@ def _create_command_process(command: list[str]) -> subprocess.Popen[str]:
 
 
 def _process_output_and_yield_raw(
-    process: subprocess.Popen[str], output: typing.TextIO
+    process: subprocess.Popen[str], output: typing.TextIO, command: list[str]
 ) -> typing.Iterator[str]:
     """Read process output, write blocks to output, yield raw output.
 
@@ -267,7 +271,7 @@ def _process_output_and_yield_raw(
     raw output immediately as blocks are read (for saving to file).
     """
     assert process.stdout
-    for block in split_blocks(process.stdout):
+    for block in split_blocks_auto(command, process.stdout):
         _write_block_and_maybe_flush(output, block)
         yield block
     print_verbose("  Command exit:", process.returncode)
@@ -331,7 +335,9 @@ def reload_command(command: list[str]) -> None:
             sock.sendall(b"save-output\n")
 
             with _create_command_process(command) as process:
-                raw_output = _process_output_and_yield_raw(process, sys.stdout)
+                raw_output = _process_output_and_yield_raw(
+                    process, sys.stdout, command
+                )
                 for chunk in _buffer_chunks(raw_output):
                     data_bytes = chunk.encode("utf-8")
                     sock.sendall(f"{len(data_bytes)}\n".encode())

@@ -9,7 +9,7 @@ class UnknownToolError(KeyError):
 
 # Known tools that have errorformat definitions
 # Add tools here as errorformat support is implemented
-KNOWN_TOOLS: set[str] = set()
+KNOWN_TOOLS: set[str] = {"mypy"}
 
 
 def detect_tool(command: list[str]) -> str:

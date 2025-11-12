@@ -9,6 +9,9 @@ import typing
 from dataclasses import dataclass
 from enum import Enum, auto
 
+from tuick.errorformat import parse_with_errorformat
+from tuick.errorformats import detect_tool, is_known_tool
+
 if typing.TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
@@ -298,6 +301,25 @@ def split_blocks(lines: Iterable[str]) -> Iterator[str]:
     splitter = BlockSplitter()
     for line in lines:
         yield from splitter.process_line(line)
+
+
+def split_blocks_errorformat(tool: str, lines: Iterable[str]) -> Iterator[str]:
+    r"""Split lines into \0-separated blocks using errorformat."""
+    yield from parse_with_errorformat(tool, lines)
+
+
+def split_blocks_auto(
+    command: list[str], lines: Iterable[str]
+) -> Iterator[str]:
+    r"""Split lines into \0-separated blocks, auto-selecting parser.
+
+    Uses errorformat for known tools, regex parser otherwise.
+    """
+    tool = detect_tool(command)
+    if is_known_tool(tool):
+        yield from split_blocks_errorformat(tool, lines)
+    else:
+        yield from split_blocks(lines)
 
 
 def get_location(selection: str) -> FileLocation:

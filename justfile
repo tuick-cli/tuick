@@ -162,7 +162,7 @@ todo:
 agent-check: agent-compile
     #!/usr/bin/env bash -euo pipefail
     {{ _bash-defs }} {{ _agent-check-body }}
-    end-safe && { {{ is_dependency() }} ||  echo OK; }s
+    end-safe && { {{ is_dependency() }} ||  echo OK; }
 
 [private]
 _agent-check-body := '''
