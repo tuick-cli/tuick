@@ -158,9 +158,9 @@ def test_cli_default_launches_fzf() -> None:
         ) as popen_mock,
         patch("tuick.cli.MonitorThread"),
     ):
-        runner.invoke(app, ["--", "ruff", "check", "src/"])
+        runner.invoke(app, ["--", "flake8", "src/"])
 
-    assert popen_mock.call_args_list[0].args[0] == ["ruff", "check", "src/"]
+    assert popen_mock.call_args_list[0].args[0] == ["flake8", "src/"]
     assert popen_mock.call_args_list[0].kwargs["stdout"] == subprocess.PIPE
     assert popen_mock.call_args_list[1].args[0][0] == "errorformat"
     assert popen_mock.call_args_list[1].kwargs["stdin"] == subprocess.PIPE

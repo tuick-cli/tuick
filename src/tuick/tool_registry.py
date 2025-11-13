@@ -20,12 +20,24 @@ CUSTOM_PATTERNS: dict[str, list[str]] = {
         "%C%s%m",  # continuation (indented or traceback)
     ],
     "ruff": [
-        "%E%f:%l:%c: %m",  # src/file.py:8:1: I001 Message
-        "%E%m",  # I001 [*] Import block is un-sorted
-        "%C  --> %f:%l:%c",  # --> src/file.py:8:1
-        "%C%#--> %f:%l:%c",  # --> src/file.py:8:1 (with dash)
-        "%GFound %n error%.%#",  # Found 12 errors.
-        "%C%s%m",  # continuation (context, help text)
+        # Concise format: src/file.py:8:1: I001 Message
+        "%E%f:%l:%c: %m",
+        # Full format: error code + message starts multiline block
+        "%E%m",
+        # Full format: location line upgrades block with file:line:col
+        "%C  --> %f:%l:%c",
+        "%C%#--> %f:%l:%c",
+        # Full format: code snippet lines (line number | code)
+        "%C%s%\\d%#%s|%m",
+        "%C%s|%m",
+        # Empty line (matched as blank, ends block in grouping)
+        "%G",
+        # Footer: error count
+        "%GFound %n error%.%#",
+        # Footer: all clear
+        "%GAll checks passed!",
+        # Generic continuation
+        "%C%m",
     ],
 }
 

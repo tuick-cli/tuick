@@ -293,6 +293,86 @@ def group_pytest_entries(  # noqa: C901, PLR0912
         yield pending
 
 
+def group_ruff_entries(  # noqa: C901, PLR0912
+    entries: Iterable[ErrorformatEntry],
+) -> Iterator[ErrorformatEntry]:
+    """Group ruff errorformat entries into multi-line blocks.
+
+    Ruff block structure:
+    - Error code + message (e.g., "I001 [*] ...") starts a block
+    - --> file:line:col upgrades block with location
+    - Code snippet lines (with |) append to block
+    - Empty line ends block (appended as blank)
+    - "Found N errors" or "All checks passed!" starts footer block
+    - Lines after footer start append to footer
+
+    Yields:
+        Grouped entries with location from --> lines
+    """
+    pending: ErrorformatEntry | None = None
+    in_footer = False
+
+    for entry in entries:
+        assert len(entry.lines) == 1
+        line = entry.lines[0] if entry.lines else ""
+        is_empty = not line.strip()
+        is_footer_start = (
+            line.startswith("Found ") and " error" in line
+        ) or line.startswith("All checks passed!")
+        is_location_line = "-->" in line and entry.lnum
+
+        if in_footer:
+            # Append everything to footer block
+            if pending:
+                pending = replace(pending, lines=pending.lines + entry.lines)
+        elif is_footer_start:
+            # Start footer block
+            if pending:
+                yield pending
+            pending = entry
+            in_footer = True
+        elif is_empty:
+            # Empty line ends current block
+            if pending:
+                pending = replace(pending, lines=pending.lines + entry.lines)
+                yield pending
+                pending = None
+        elif is_location_line:
+            # Location line upgrades pending block
+            if pending:
+                pending = replace(
+                    pending,
+                    lines=pending.lines + entry.lines,
+                    filename=entry.filename,
+                    lnum=entry.lnum,
+                    col=entry.col,
+                )
+            else:
+                # Orphaned location line - start new block
+                pending = entry
+        elif entry.lnum:
+            # Error line with location (concise format)
+            if pending and pending.filename:
+                # Already have a block with location - start new block
+                yield pending
+                pending = entry
+            elif pending:
+                # Pending block without location - shouldn't happen
+                pending = replace(pending, lines=pending.lines + entry.lines)
+            else:
+                # Start new block
+                pending = entry
+        elif pending:
+            # Continuation line - append to pending block
+            pending = replace(pending, lines=pending.lines + entry.lines)
+        else:
+            # Start new block (error code + message)
+            pending = entry
+
+    if pending:
+        yield pending
+
+
 def parse_with_errorformat(tool: str, lines: Iterable[str]) -> Iterator[str]:
     """Parse tool output with errorformat, yield block chunks.
 
@@ -321,6 +401,8 @@ def parse_with_errorformat(tool: str, lines: Iterable[str]) -> Iterator[str]:
         entries = group_entries_by_location(entries)
     elif tool == "pytest":
         entries = group_pytest_entries(entries)
+    elif tool == "ruff":
+        entries = group_ruff_entries(entries)
 
     for entry in entries:
         # Restore original colored lines from mapping
