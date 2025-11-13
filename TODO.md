@@ -1,45 +1,5 @@
 # Tuick Task List
 
-- **Errorformat Integration** (see `docs/PLAN-errorformat-integration.md`)
-
-  Add errorformat-based parsing with three modes.
-
-  **Modes**:
-  - Default: `tuick ruff check` → auto-detect → parse → fzf (simple case)
-  - Top: `tuick make` → parse mixed stream → fzf (orchestrator)
-  - Nested: `tuick --format ruff check` → structured blocks output
-
-  **Outline**:
-  1. ✓ Write xfail integration tests (simple, top-format, format passthrough)
-  2. ✓ Add --format and --top to CLI (route, options, TUICK_NESTED env var)
-  3. ✓ Tool detection (detect_tool, is_known_tool, KNOWN_TOOLS set)
-  4. ✓ Errorformat wrapper (subprocess, JSONL parsing, multi-line support)
-     - Pattern registries: BUILTIN_TOOLS, CUSTOM_PATTERNS, OVERRIDE_PATTERNS
-     - Implemented for mypy with custom patterns
-     - TODO: Add integration test for built-in pattern path (e.g., ruff)
-  5. ✓ Block assembly with markers (\x02, \x03)
-     - Added wrap_blocks_with_markers() for nested mode
-     - Updated test helpers to use null-terminated blocks
-  6. ✓ Implement format_command (nested mode, check TUICK_PORT)
-  7. ✓ Implement top_command (orchestrator, two-layer parsing)
-     - Auto-detect build systems in default routing
-     - Two-layer parsing with split_at_markers()
-     - Reuses list_command infrastructure via top_mode parameter
-  8. ✓ Update default command (check TUICK_PORT)
-  9. ✓ Update fzf integration (delimiter config)
-  10. ✓ Update select_command (receive fields from fzf)
-  11. ✓ Update reload_command (propagate --top through callbacks)
-      - Added explicit_top parameter to CallbackCommands
-      - Preserves explicit --top flag in reload binding
-      - Auto-detected build systems rely on auto-detection (no --top in binding)
-  12. Documentation (README, codebase-map, errorformat-guide)
-
-  **Block format**: `file\x1fline\x1fcol\x1fend-line\x1fend-col\x1fcontent\0`
-
-  **Nested output**: `\x02block1\0block2\0\x03` (null-terminated blocks)
-
-  **fzf config**: `--delimiter=\x1f --with-nth=6`
-
 - **Group errorformat entries by location**: errorformat splits multi-line
   blocks into separate entries (mypy note lines, continuation lines). Add
   post-processing in parse_with_errorformat() to group entries by location.

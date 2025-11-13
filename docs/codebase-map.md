@@ -2,7 +2,7 @@
 
 **Purpose**: Token-efficient reference for understanding tuick architecture and locating code for modifications.
 
-**Last Updated**: 2025-11-11
+**Last Updated**: 2025-11-13
 
 ## Project Overview
 
@@ -15,13 +15,17 @@ Tuick is a command-line tool that runs build commands, parses their output for e
 ```
 tuick/
 ├── src/tuick/          # Main source code
-│   ├── cli.py          # Entry point, command routing
-│   ├── parser.py       # Error parsing, block splitting
+│   ├── cli.py          # Entry point, command routing, modes
+│   ├── parser.py       # Legacy regex-based parsing, block splitting
+│   ├── errorformat.py  # Errorformat subprocess wrapper, JSONL parsing
+│   ├── tool_registry.py # Tool detection, errorformat patterns
+│   ├── ansi.py         # ANSI code stripping
 │   ├── console.py      # Logging, output formatting
 │   ├── fzf.py          # fzf process management
 │   ├── reload_socket.py # TCP coordination server
-│   ├── monitor.py      # Filesystem watcher
-│   └── editor.py       # Editor command building
+│   ├── monitor.py      # Filesystem watcher (watchexec)
+│   ├── editor.py       # Editor command building
+│   └── shell.py        # Shell quoting utilities
 ├── tests/              # Test suite
 ├── docs/               # Documentation
 │   └── codebase-map.md # This file
@@ -207,6 +211,50 @@ reload_command() → send "reload" → wait for "go"
 - GUI: `-g file:line:col` (vscode)
 - URL: `file://path:line:col` (some editors)
 
+### errorformat.py (178 lines)
+**Purpose**: Errorformat subprocess wrapper, JSONL parsing, block formatting
+
+**Key Functions**:
+- `run_errorformat(tool, input_lines) -> Iterator[ErrorformatEntry]`
+  - Runs errorformat subprocess with tool-specific patterns
+  - Parses JSONL output into ErrorformatEntry objects
+
+- `parse_with_errorformat(tool, lines) -> Iterator[str]`
+  - Parse tool output preserving ANSI codes
+  - Maps stripped lines to original colored lines
+  - Yields null-terminated blocks
+
+- `split_at_markers(lines) -> Iterator[tuple[bool, str]]`
+  - Split stream at `\x02` and `\x03` markers
+  - Used by top mode for two-layer parsing
+
+- `wrap_blocks_with_markers(blocks) -> Iterator[str]`
+  - Wrap blocks with `\x02` and `\x03` markers
+  - Used by format mode for nested output
+
+**Data Structures**:
+- `ErrorformatEntry`: filename, lnum, col, end_lnum, end_col, lines, text, type, valid
+
+### tool_registry.py (49 lines)
+**Purpose**: Tool detection and errorformat pattern registry
+
+**Registries**:
+- `BUILTIN_TOOLS`: Tools with errorformat built-in support (flake8)
+- `CUSTOM_PATTERNS`: Custom patterns for tools without built-in support
+- `OVERRIDE_PATTERNS`: Override inadequate built-in patterns (mypy)
+- `BUILD_SYSTEMS`: Build orchestrators (make, just, cmake, ninja)
+
+**Key Functions**:
+- `detect_tool(command) -> str`: Extract tool name from command
+- `is_known_tool(tool) -> bool`: Check errorformat support
+- `is_build_system(tool) -> bool`: Check if tool is build orchestrator
+
+### ansi.py
+**Purpose**: ANSI escape code handling
+
+**Key Functions**:
+- `strip_ansi(text) -> str`: Remove ANSI codes for parsing
+
 ### console.py (167 lines)
 **Purpose**: Logging, output formatting, stderr capture
 
@@ -319,21 +367,37 @@ reload_command()
 
 ## Key Integration Points
 
-### Where to Add Errorformat Parsing
+### Errorformat Integration (Implemented)
 
-**Primary**: `parser.py` - `split_blocks()` function (line 289)
-- Currently uses regex + state machine
-- **Future**: Call reviewdog subprocess, parse structured output
-- Keep existing logic as fallback
+**errorformat.py** - Errorformat subprocess wrapper:
+- `run_errorformat()`: Run errorformat subprocess, yield parsed entries
+- `parse_with_errorformat()`: Parse tool output, preserve ANSI codes
+- `format_block_from_entry()`: Format errorformat entry as tuick block
+- `split_at_markers()`: Split lines at `\x02` and `\x03` markers for top mode
+- `wrap_blocks_with_markers()`: Wrap blocks with markers for format mode
 
-**Secondary**: `cli.py` - `list_command()` and `reload_command()`
-- Both call `split_blocks()` through shared implementation
-- `list_command()`: calls `split_blocks()` directly on command output (line 183)
-- `reload_command()`: calls `_process_output_and_yield_raw()` which calls `split_blocks()` (line 334)
-- Pass format configuration to split_blocks()
-- Add `--format` and `--top` option propagation through callbacks
+**tool_registry.py** - Tool detection and patterns:
+- `BUILTIN_TOOLS`: Tools with errorformat built-in patterns (flake8)
+- `CUSTOM_PATTERNS`: Custom patterns for unsupported tools
+- `OVERRIDE_PATTERNS`: Override patterns for inadequate built-ins (mypy)
+- `BUILD_SYSTEMS`: Build system detection (make, just, cmake, ninja)
+- `detect_tool()`: Extract tool name from command
+- `is_known_tool()`: Check if tool has errorformat support
+- `is_build_system()`: Check if tool is a build system
 
-**Shared implementation**: Both modes use split_blocks() for parsing, so errorformat integration in split_blocks() automatically works for both list and reload modes.
+**cli.py** - Mode routing:
+- Default mode (no flags): Auto-detect tool, route to list_command or top mode
+- `--format`: format_command() - parse and output structured blocks
+- `--top`: top_command() - orchestrator with two-layer parsing
+- TUICK_PORT environment: nested mode behavior in default path
+
+**Three modes**:
+1. **List mode** (default for checkers): Run tool → parse → fzf
+2. **Top mode** (default for build systems): Two-layer parsing with nested blocks
+3. **Format mode** (`--format` or TUICK_PORT set): Parse and output blocks
+
+**Block format**: `file\x1fline\x1fcol\x1fend-line\x1fend-col\x1fcontent\0`
+**fzf config**: `--delimiter=\x1f --with-nth=6`
 
 ### Current Parsing Logic
 
