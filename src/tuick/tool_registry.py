@@ -14,6 +14,7 @@ BUILTIN_TOOLS: set[str] = {"flake8"}
 CUSTOM_PATTERNS: dict[str, list[str]] = {
     "pytest": [
         "%E%f:%l: %m",  # tests/test_search.py:133: ValueError
+        "%E%f:%l: ",  # 'tests/test_search.py:142: '
         "%G=%#%m%#=%#",  # ===== FAILURES =====
         "%G_%#%m%#_%#",  # _____ test_name _____
         "%C%s%m",  # continuation (indented or traceback)

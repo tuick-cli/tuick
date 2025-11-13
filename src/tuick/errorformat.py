@@ -213,6 +213,86 @@ def format_block_from_entry(entry: ErrorformatEntry) -> str:
     )
 
 
+def group_pytest_entries(  # noqa: C901, PLR0912
+    entries: Iterable[ErrorformatEntry],
+) -> Iterator[ErrorformatEntry]:
+    """Group pytest errorformat entries into multi-line blocks.
+
+    Pytest blocks are info blocks (no location) delimited by headings:
+    - === headings === start new info block OR continue current info block
+    - ___ headings ___ start new test failure blocks
+    - _ _ _ delimiters start new traceback frame blocks
+
+    All pytest blocks have empty location fields.
+
+    Yields:
+        Grouped entries without location fields
+    """
+    pending: ErrorformatEntry | None = None
+    pending_is_eq_block = False
+
+    for entry in entries:
+        assert len(entry.lines) == 1
+        line = entry.lines[0] if entry.lines else ""
+        # Match headings: at least 3 = or _ at start and end
+        is_eq_heading = (
+            len(line) >= 6 and line[:3] == "===" and line[-3:] == "==="
+        )
+        is_underscore_heading = (
+            len(line) >= 6 and line[:3] == "___" and line[-3:] == "___"
+        )
+        # Match _ _ _ delimiter at start of line
+        is_delimiter = line.startswith("_ _ _")
+
+        # Determine if we should start a new block
+        if is_eq_heading:
+            # === continues === blocks, starts new block otherwise
+            if pending and pending_is_eq_block:
+                # Current is === block - append
+                pending = replace(pending, lines=pending.lines + entry.lines)
+            else:
+                # Start new === block
+                if pending:
+                    yield pending
+                pending = entry
+                pending_is_eq_block = True
+        elif is_underscore_heading or is_delimiter:
+            # ___ and _ _ _ always start new blocks
+            if pending:
+                yield pending
+            pending = entry
+            pending_is_eq_block = False
+        # Error line - handle based on context
+        elif entry.lnum:
+            # Error line with location
+            if pending and pending_is_eq_block:
+                # Pending is prolog block, start a new  block
+                yield pending
+                pending = entry
+                pending_is_eq_block = False
+            elif pending and not pending.filename:
+                # Pending is info - upgrade with location (keep it)
+                pending = replace(entry, lines=pending.lines + entry.lines)
+            elif pending:
+                # Pending has location - start new block (keep location)
+                yield pending
+                pending = entry
+                pending_is_eq_block = False
+            else:
+                # No pending - start new block (keep location)
+                pending = entry
+                pending_is_eq_block = False
+        elif pending:
+            # Regular continuation - append
+            pending = replace(pending, lines=pending.lines + entry.lines)
+        else:
+            pending = entry
+            pending_is_eq_block = False
+
+    if pending:
+        yield pending
+
+
 def parse_with_errorformat(tool: str, lines: Iterable[str]) -> Iterator[str]:
     """Parse tool output with errorformat, yield block chunks.
 
@@ -239,6 +319,8 @@ def parse_with_errorformat(tool: str, lines: Iterable[str]) -> Iterator[str]:
     # Group entries by location (merges notes with errors)
     if tool == "mypy":
         entries = group_entries_by_location(entries)
+    elif tool == "pytest":
+        entries = group_pytest_entries(entries)
 
     for entry in entries:
         # Restore original colored lines from mapping

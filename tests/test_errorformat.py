@@ -14,6 +14,7 @@ from .test_parser import (
     PYTEST_AUTO_BLOCKS,
     PYTEST_LINE_BLOCKS,
     PYTEST_SHORT_BLOCKS,
+    PYTEST_TRICKY_BLOCKS,
     RUFF_CONCISE_BLOCKS,
     RUFF_FULL_BLOCKS,
 )
@@ -174,32 +175,101 @@ def test_split_at_markers_no_markers() -> None:
     assert result == [(False, "line1\nline2\n")]
 
 
-@pytest.mark.xfail(reason="Task 1: pytest patterns not yet implemented")
+PYTEST_LOCATIONS: dict[str, list[tuple[str, ...]]] = {
+    "auto": [
+        ("",),  # Info block: session header + FAILURES
+        ("tests/test_search.py", "133"),  # test_extract_search_card error
+        ("tests/test_search.py", "142"),  # test_extract_search_card_no_salary
+        ("src/jobsearch/search.py", "92"),  # Traceback frame
+        ("src/jobsearch/search.py", "68"),  # Traceback frame
+        ("",),  # Info block: summary
+    ],
+    "short": [
+        ("",),  # Info block: session header + FAILURES
+        ("tests/test_search.py", "133"),  # test_extract_search_card error
+        ("tests/test_search.py", "142"),  # test_extract_search_card_no_salary
+        ("src/jobsearch/search.py", "92"),  # Traceback frame
+        ("src/jobsearch/search.py", "68"),  # Traceback frame
+        ("",),  # Info block: summary
+    ],
+    "line": [
+        ("",),  # Info block: session header + FAILURES
+        ("/Users/david/code/jobsearch/tests/test_search.py", "133"),
+        ("/Users/david/code/jobsearch/src/jobsearch/search.py", "68"),
+        ("",),  # Info block: summary
+    ],
+    "tricky": [
+        ("",),  # Info block: FAILURES heading
+        ("tests/test_cli.py", "142"),  # test_cli_reload_option with ANSI
+        ("",),  # Info block: test_cli_select_verbose heading
+    ],
+}
+
+
 @pytest.mark.parametrize(
-    "blocks", [PYTEST_AUTO_BLOCKS, PYTEST_SHORT_BLOCKS, PYTEST_LINE_BLOCKS]
+    ("test_id", "blocks"),
+    [
+        ("auto", PYTEST_AUTO_BLOCKS),
+        ("short", PYTEST_SHORT_BLOCKS),
+        ("line", PYTEST_LINE_BLOCKS),
+        ("tricky", PYTEST_TRICKY_BLOCKS),
+    ],
 )
-def test_parse_with_errorformat_pytest(blocks: list[str]) -> None:
+def test_parse_with_errorformat_pytest(
+    test_id: str, blocks: list[str]
+) -> None:
     """Integration test: parse pytest output produces blocks per error."""
+    locations = PYTEST_LOCATIONS[test_id]
     input_text = "\n".join((*blocks, ""))
     input_lines = input_text.splitlines(keepends=True)
     result = "".join(parse_with_errorformat("pytest", input_lines))
 
-    expected = [Block("", "", "", "", "", block) for block in blocks]
+    expected = [
+        replace(Block(*loc), content=blocks[i])
+        for i, loc in enumerate(locations)
+    ]
     parsed = [Block.from_block(b) for b in result.strip("\0").split("\0")]
     expected_fmt = "\n\n".join(b.format_for_test() for b in expected)
     parsed_fmt = "\n\n".join(b.format_for_test() for b in parsed)
     assert parsed_fmt == expected_fmt
 
 
+RUFF_LOCATIONS: dict[str, list[tuple[str, ...]]] = {
+    "full": [
+        ("src/jobsearch/search_cli.py", "8", "1"),
+        ("src/jobsearch/search_cli.py", "51", "5"),
+        ("src/tui_checker.py", "1", "1"),
+        ("tests/test_search.py", "134", "5"),
+        ("",),  # Summary block
+    ],
+    "concise": [
+        ("src/jobsearch/search_cli.py", "8", "1"),
+        ("src/jobsearch/search_cli.py", "51", "5"),
+        ("src/tui_checker.py", "1", "1"),
+        ("",),  # Summary block
+    ],
+}
+
+
 @pytest.mark.xfail(reason="Task 2: ruff patterns not yet implemented")
-@pytest.mark.parametrize("blocks", [RUFF_FULL_BLOCKS, RUFF_CONCISE_BLOCKS])
-def test_parse_with_errorformat_ruff(blocks: list[str]) -> None:
+@pytest.mark.parametrize(
+    ("test_id", "blocks"),
+    [
+        ("full", RUFF_FULL_BLOCKS),
+        ("concise", RUFF_CONCISE_BLOCKS),
+    ],
+)
+def test_parse_with_errorformat_ruff(test_id: str, blocks: list[str]) -> None:
     """Integration test: parse ruff output produces blocks per error."""
+    locations = RUFF_LOCATIONS[test_id]
     input_text = "\n".join((*blocks, ""))
     input_lines = input_text.splitlines(keepends=True)
     result = "".join(parse_with_errorformat("ruff", input_lines))
 
-    expected = [Block("", "", "", "", "", block) for block in blocks]
+    expected = [
+        replace(Block(*loc), content=blocks[i])
+        for i, loc in enumerate(locations)
+    ]
     parsed = [Block.from_block(b) for b in result.strip("\0").split("\0")]
     expected_fmt = "\n\n".join(b.format_for_test() for b in expected)
     parsed_fmt = "\n\n".join(b.format_for_test() for b in parsed)

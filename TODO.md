@@ -29,6 +29,9 @@
 - REF[med]: Refactor run_errorformat() to reduce complexity (C901: 11 > 10).
   Extract helper functions for thread management and output streaming.
 
+- REF[med]: Refactor group_pytest_entries() to reduce complexity (C901,
+  PLR0912: 14 > 12). Extract helper functions or simplify branching logic.
+
 - REF[med]: Refactor group_entries_by_location() to reduce complexity (C901,
   PLR0912). Extract helper functions or simplify branching logic.
 
