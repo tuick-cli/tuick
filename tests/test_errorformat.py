@@ -38,7 +38,7 @@ class Block:
         assert len(parts) == 6, f"got {len(parts)}: {block!r}"
         return cls(*parts)
 
-    def format_for_test(self) -> str:
+    def format_for_test(self) -> list[str]:
         """Format block for readable pytest output."""
         parts = [f"file={self.file!r}"]
         if self.line:
@@ -51,7 +51,7 @@ class Block:
             parts.append(f"end_col={self.end_col!r}")
         lines = [" ".join(parts)]
         lines.extend(f"  {line!r}" for line in self.content.splitlines())
-        return "\n".join(lines)
+        return lines
 
 
 MYPY_LOCATIONS: dict[str, list[tuple[str, ...]]] = {
@@ -100,8 +100,8 @@ def test_parse_with_errorformat_mypy(test_id: str) -> None:
         for i, loc in enumerate(locations)
     ]
     parsed = [Block.from_block(b) for b in result.strip("\0").split("\0")]
-    expected_fmt = "\n\n".join(b.format_for_test() for b in expected)
-    parsed_fmt = "\n\n".join(b.format_for_test() for b in parsed)
+    expected_fmt = [b.format_for_test() for b in expected]
+    parsed_fmt = [b.format_for_test() for b in parsed]
     assert parsed_fmt == expected_fmt
 
 
@@ -120,8 +120,8 @@ def test_parse_with_errorformat_flake8() -> None:
         Block("test_flake8.py", "5", "80", "", "", flake8_output[2].rstrip()),
     ]
     parsed = [Block.from_block(b) for b in result.strip("\0").split("\0")]
-    expected_fmt = "\n\n".join(b.format_for_test() for b in expected)
-    parsed_fmt = "\n\n".join(b.format_for_test() for b in parsed)
+    expected_fmt = [b.format_for_test() for b in expected]
+    parsed_fmt = [b.format_for_test() for b in parsed]
     assert parsed_fmt == expected_fmt
 
 
@@ -142,8 +142,8 @@ def test_parse_with_errorformat_flake8_with_ansi() -> None:
         Block("test_flake8.py", "2", "1", "", "", flake8_colored[1].rstrip()),
     ]
     parsed = [Block.from_block(b) for b in result.strip("\0").split("\0")]
-    expected_fmt = "\n\n".join(b.format_for_test() for b in expected)
-    parsed_fmt = "\n\n".join(b.format_for_test() for b in parsed)
+    expected_fmt = [b.format_for_test() for b in expected]
+    parsed_fmt = [b.format_for_test() for b in parsed]
     assert parsed_fmt == expected_fmt
 
 
@@ -229,8 +229,8 @@ def test_parse_with_errorformat_pytest(
         for i, loc in enumerate(locations)
     ]
     parsed = [Block.from_block(b) for b in result.strip("\0").split("\0")]
-    expected_fmt = "\n\n".join(b.format_for_test() for b in expected)
-    parsed_fmt = "\n\n".join(b.format_for_test() for b in parsed)
+    expected_fmt = [b.format_for_test() for b in expected]
+    parsed_fmt = [b.format_for_test() for b in parsed]
     assert parsed_fmt == expected_fmt
 
 
@@ -270,6 +270,6 @@ def test_parse_with_errorformat_ruff(test_id: str, blocks: list[str]) -> None:
         for i, loc in enumerate(locations)
     ]
     parsed = [Block.from_block(b) for b in result.strip("\0").split("\0")]
-    expected_fmt = "\n\n".join(b.format_for_test() for b in expected)
-    parsed_fmt = "\n\n".join(b.format_for_test() for b in parsed)
+    expected_fmt = [b.format_for_test() for b in expected]
+    parsed_fmt = [b.format_for_test() for b in parsed]
     assert parsed_fmt == expected_fmt
