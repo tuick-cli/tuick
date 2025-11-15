@@ -12,7 +12,7 @@
    learnings, update AGENTS.md if needed. DO NOT SKIP.
 6. **Commit**: Short informative message with gitmoji
 
-## Project Rules
+## General Rules
 
 - adblock: DO NOT advertise yourself in commit messages. NO "Generated with",
   "Co-Authored-By", or similar phrases
@@ -111,6 +111,8 @@
 - Use most general type that works: `Iterable` over `Iterator` when only
   iteration needed
 - Missing values: Use `None` for missing/optional data, not `0` or `''`
+- Context managers: Use `Self` type (from typing) for `__enter__` return
+  annotation in context manager classes
 
 ### Function Design
 
@@ -346,3 +348,13 @@
 - **Testing tool integrations**: Use helper scripts (like `fmt_ef.py`) to test
   patterns with actual tool output before writing integration code. Run real
   examples through different pattern combinations to verify behavior.
+
+## Project-Specific Rules
+
+### Tuick CLI Testing
+
+- Selective subprocess mocking: Integration tests for CLI need to mock UI
+  (fzf) but allow real tool subprocesses (errorformat, command under test).
+  Use `patch_popen_selective(mock_map)` that checks command name and returns
+  mock or calls real Popen. Patch both cli and errorformat modules. Track
+  calls in list attribute for verification.

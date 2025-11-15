@@ -1,26 +1,32 @@
-# Plan: Add Format Override Options and Remove Legacy Parser Code
+# Plan: Remove Legacy Parser Code
 
-## Task 1: Add -f/--format-name and -p/--pattern CLI options (TOP PRIORITY)
+## ✅ Task 1: Add -f/--format-name and -p/--pattern CLI options (COMPLETED)
 
-### Implementation:
-1. Add CLI options to `main()` in cli.py:
-   - `-f/--format-name` (str, optional): Override autodetected format
-   - `-p/--pattern` (list[str], optional): Supplement/override patterns
-   - Used by: `list`, `reload`, `format`, `top` commands
+### Completed implementation:
+1. Added CLI options to `main()` in cli.py:
+   - `-f/--format-name` (str): Override autodetected format
+   - `-p/--pattern` (list[str]): Custom errorformat patterns (mutually exclusive with -f)
+   - Passed to: `list`, `reload`, `format`, `top` commands
 
-2. Validation logic:
-   - If command tool is not autodetected AND neither -f nor -p provided → error
-   - Pass these options to all parsing functions
+2. Created FormatConfig sum type:
+   - `FormatName(format_name: str)` for named formats
+   - `CustomPatterns(patterns: list[str])` for custom patterns
+   - `_create_format_config()` validates and creates config
 
-3. Pass options through fzf bindings:
-   - Update `CallbackCommands` class to include -f/-p in generated commands
-   - Manual reload (fzf ctrl-r binding): include -f/-p in reload command
-   - Auto-reload (TCP monitor): include -f/-p in reload command
+3. Format validation:
+   - Checks BUILTIN_TOOLS, CUSTOM_PATTERNS, OVERRIDE_PATTERNS
+   - Queries errorformat builtin formats (cached)
+   - Accepts build systems (stub patterns: %C%m, %A%m)
 
-4. Update errorformat.py:
-   - Add format_name and patterns parameters to parsing functions
-   - Use format_name to override detected tool
-   - Use patterns to supplement/override CUSTOM_PATTERNS
+4. Updated errorformat.py:
+   - `parse_with_errorformat()` accepts FormatConfig parameter
+   - Pattern matching selects patterns vs -name= flag
+
+5. Pass options through fzf bindings:
+   - `CallbackCommands` builds format_opts from config
+   - Included in manual reload and auto-reload bindings
+
+**COMMITTED** b45bd47: ✨ Add -f/--format-name and -p/--pattern CLI options
 
 ## Task 2: Update reload_command to use errorformat parsing
 
