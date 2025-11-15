@@ -2,6 +2,7 @@
 
 import functools
 import io
+import os
 import socket
 import subprocess
 import sys
@@ -380,7 +381,7 @@ def test_cli_select_plain(console_out: ConsoleFixture) -> None:
     """--select option opens editor at location and prints nothing."""
     with (
         patch("tuick.cli.subprocess.run") as mock_run,
-        patch("tuick.cli.get_editor_from_env", return_value="vi"),
+        patch.dict(os.environ, {"EDITOR": "vi"}, clear=True),
     ):
         mock_run.return_value = create_autospec(
             subprocess.CompletedProcess,
@@ -399,7 +400,7 @@ def test_cli_select_verbose(console_out: ConsoleFixture) -> None:
     """--verbose --select prints the command to execute."""
     with (
         patch("tuick.cli.subprocess.run") as mock_run,
-        patch("tuick.cli.get_editor_from_env", return_value="vi"),
+        patch.dict(os.environ, {"EDITOR": "vi"}, clear=True),
     ):
         mock_run.return_value = create_autospec(
             subprocess.CompletedProcess, instance=True
@@ -420,7 +421,7 @@ def test_cli_select_error(console_out: ConsoleFixture) -> None:
     """--select prints a message if the editor exits with error."""
     with (
         patch("tuick.cli.subprocess.run") as mock_run,
-        patch("tuick.cli.get_editor_from_env", return_value="vi"),
+        patch.dict(os.environ, {"EDITOR": "vi"}, clear=True),
     ):
         mock_run.side_effect = subprocess.CalledProcessError(
             returncode=1, cmd="whatever"

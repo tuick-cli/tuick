@@ -14,6 +14,7 @@ from tuick.editor import (
     EditorSubprocess,
     EditorURL,
     FileLocation,
+    _validate_templates,
     get_editor_command,
     get_editor_from_env,
 )
@@ -324,17 +325,105 @@ def test_get_editor_from_env_none() -> None:
     ],
 )
 def test_get_editor_command(
-    editor: str, location: FileLocation, expected: list[str]
+    location: FileLocation, expected: list[str], editor: str
 ) -> None:
-    """Build editor command from editor string and location."""
-    with patch.object(
-        Path, "resolve", autospec=True, side_effect=_mock_resolve
+    """Build editor command from EDITOR env variable and location."""
+    with (
+        patch.dict(os.environ, {"EDITOR": editor}, clear=True),
+        patch.object(
+            Path, "resolve", autospec=True, side_effect=_mock_resolve
+        ),
     ):
-        cmd = get_editor_command(editor, location)
+        cmd = get_editor_command(location)
         if isinstance(cmd, EditorURL):
             assert ["open", cmd.url] == expected
         elif isinstance(cmd, EditorSubprocess):
             assert list(cmd.args) == expected
+
+
+def test_tuick_editor_overrides_editor_and_visual() -> None:
+    """TUICK_EDITOR overrides EDITOR and VISUAL."""
+    with patch.dict(
+        os.environ,
+        {"TUICK_EDITOR": "emacs", "EDITOR": "vim", "VISUAL": "nano"},
+        clear=True,
+    ):
+        assert get_editor_from_env() == "emacs"
+
+
+def test_tuick_editor_line_template() -> None:
+    """Template TUICK_EDITOR_LINE with file and line placeholders."""
+    location = FileLocation(path="src/my file.py", row=10, column=None)
+    with patch.dict(
+        os.environ,
+        {"TUICK_EDITOR_LINE": "vim +{line} {file}"},
+        clear=True,
+    ):
+        cmd = get_editor_command(location)
+        assert isinstance(cmd, EditorSubprocess)
+        assert cmd.command_words() == ["vim", "+10", "src/my file.py"]
+
+
+def test_tuick_editor_line_column_template() -> None:
+    """Template with file, line, column placeholders."""
+    location = FileLocation(path="src/my file.py", row=10, column=5)
+    with patch.dict(
+        os.environ,
+        {"TUICK_EDITOR_LINE_COLUMN": "emacs +{line}:{column} {file}"},
+        clear=True,
+    ):
+        cmd = get_editor_command(location)
+        assert isinstance(cmd, EditorSubprocess)
+        assert cmd.command_words() == ["emacs", "+10:5", "src/my file.py"]
+
+
+def test_template_precedence() -> None:
+    """LINE_COLUMN template takes precedence when column is present."""
+    location_with_col = FileLocation(path="test.py", row=10, column=5)
+    location_no_col = FileLocation(path="test.py", row=10, column=None)
+    with patch.dict(
+        os.environ,
+        {
+            "TUICK_EDITOR_LINE": "vim +{line} {file}",
+            "TUICK_EDITOR_LINE_COLUMN": "emacs +{line}:{column} {file}",
+        },
+        clear=True,
+    ):
+        # With column, should use LINE_COLUMN template
+        cmd_with_col = get_editor_command(location_with_col)
+        assert isinstance(cmd_with_col, EditorSubprocess)
+        assert cmd_with_col.command_words()[0] == "emacs"
+
+        # Without column, should use LINE template
+        cmd_no_col = get_editor_command(location_no_col)
+        assert isinstance(cmd_no_col, EditorSubprocess)
+        assert cmd_no_col.command_words()[0] == "vim"
+
+
+def test_empty_template_falls_through() -> None:
+    """Empty template variables fall through to EDITOR."""
+    location = FileLocation(path="test.py", row=10, column=None)
+    with patch.dict(
+        os.environ,
+        {"TUICK_EDITOR_LINE": "", "EDITOR": "vim"},
+        clear=True,
+    ):
+        cmd = get_editor_command(location)
+        assert isinstance(cmd, EditorSubprocess)
+        assert cmd.command_words()[0] == "vim"
+
+
+def test_invalid_template_raises_error() -> None:
+    """Invalid template with wrong placeholders raises ValueError."""
+    with (
+        patch.dict(
+            os.environ,
+            {"TUICK_EDITOR_LINE": "vim {0} {file}"},
+            clear=True,
+        ),
+        pytest.raises(ValueError, match="Invalid TUICK_EDITOR_LINE"),
+    ):
+        _validate_templates()
 
 
 class TestEditorURL:

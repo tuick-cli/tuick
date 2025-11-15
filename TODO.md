@@ -1,7 +1,5 @@
 # Tuick Task List
 
-- FEAT[high]: Configurable editor commands
-
 - FEAT[high]: Integrate with bat for preview. Possible approaches:
   1. `tuick --preview bat` as a wrapper to bat
   2. Hidden data (--with-nth) or invisible delimiters (so the path and line

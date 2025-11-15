@@ -334,43 +334,122 @@ class OEditor(BaseEditor):
         return EditorSubprocess(cmd)
 
 
+def _expand_editor_template(template: str, **kwargs: str | int) -> list[str]:
+    """Expand editor template with placeholders.
+
+    Splits template BEFORE interpolation to handle file names with spaces.
+    """
+    path_head, command_and_args = os.path.split(template)
+    parts = command_and_args.split()
+    expanded_parts = [part.format(**kwargs) for part in parts]
+
+    if path_head:
+        editor_path = str(Path(path_head) / expanded_parts[0])
+        return [editor_path, *expanded_parts[1:]]
+    return expanded_parts
+
+
+def _validate_templates() -> None:
+    """Validate template environment variables on command start.
+
+    Tests that templates can be formatted successfully. Catches ValueError and
+    LookupError to detect invalid syntax or placeholders.
+    """
+    line_template = os.environ.get("TUICK_EDITOR_LINE")
+    line_col_template = os.environ.get("TUICK_EDITOR_LINE_COLUMN")
+
+    if line_template:
+        try:
+            _expand_editor_template(line_template, file="test.py", line=1)
+        except (ValueError, LookupError) as e:
+            msg = f"Invalid TUICK_EDITOR_LINE template: {e}"
+            raise ValueError(msg) from e
+
+    if line_col_template:
+        try:
+            _expand_editor_template(
+                line_col_template, file="test.py", line=1, column=1
+            )
+        except (ValueError, LookupError) as e:
+            msg = f"Invalid TUICK_EDITOR_LINE_COLUMN template: {e}"
+            raise ValueError(msg) from e
+
+
+class CustomEditor(BaseEditor):
+    """Editor using custom templates from environment variables."""
+
+    command_names = ()
+
+    def get_command(self, location: FileLocation) -> EditorCommand:
+        """Build command from template environment variables."""
+        line_col_template = os.environ.get("TUICK_EDITOR_LINE_COLUMN")
+        line_template = os.environ.get("TUICK_EDITOR_LINE")
+
+        if location.column is not None and line_col_template:
+            args = _expand_editor_template(
+                line_col_template,
+                file=location.path,
+                line=location.row or 0,
+                column=location.column,
+            )
+            return EditorSubprocess(args)
+
+        if line_template:
+            args = _expand_editor_template(
+                line_template,
+                file=location.path,
+                line=location.row or 0,
+            )
+            return EditorSubprocess(args)
+
+        msg = "CustomEditor called without templates set"
+        raise AssertionError(msg)
+
+
 def get_editor_from_env() -> str | None:
-    """Get editor command from EDITOR or VISUAL environment variable.
+    """Get editor command from environment variables.
 
-    Returns:
-        Editor command with arguments, or None if neither variable is set
+    Checks TUICK_EDITOR first, then EDITOR, then VISUAL.
     """
-    return os.environ.get("EDITOR") or os.environ.get("VISUAL")
+    return (
+        os.environ.get("TUICK_EDITOR")
+        or os.environ.get("EDITOR")
+        or os.environ.get("VISUAL")
+    )
 
 
-def get_editor_command(editor: str, location: FileLocation) -> EditorCommand:
-    """Build editor command from editor string and file location.
+def get_editor_command(location: FileLocation) -> EditorCommand:
+    """Build editor command from environment and file location.
 
-    Args:
-        editor: Editor command, possibly with arguments
-        location: File location with row and optional column
-
-    Returns:
-        EditorCommand ready for execution
-
-    Raises:
-        UnsupportedEditorError: If editor is not supported
+    Checks TUICK_EDITOR_LINE_COLUMN and TUICK_EDITOR_LINE templates first, then
+    falls back to TUICK_EDITOR/EDITOR/VISUAL.
     """
-    # We want to handle paths with spaces, without escaping, that is why we use
-    # os.path.split instead of shlex.split. To be consistent, we assume that
-    # command arguments do not required quoting either, so we use str.split()
-    # instead of shlex.split(), which would seems more correct.
+    line_col_template = os.environ.get("TUICK_EDITOR_LINE_COLUMN")
+    line_template = os.environ.get("TUICK_EDITOR_LINE")
 
-    # First separate directory path from command, the path may contain spaces
+    if line_col_template or line_template:
+        custom_editor = CustomEditor("", [])
+        return custom_editor.get_command(location)
+
+    editor = (
+        os.environ.get("TUICK_EDITOR")
+        or os.environ.get("EDITOR")
+        or os.environ.get("VISUAL")
+    )
+
+    if not editor:
+        msg = "No editor configured in environment"
+        raise ValueError(msg)
+
     path_head, command_and_args = os.path.split(editor)
-
-    # Split command and arguments
     parts = command_and_args.split()
     editor_name = parts[0]
     editor_args = parts[1:]
-    editor_path = os.path.join(path_head, editor_name)  # noqa: PTH118
+    if path_head:
+        editor_path = str(Path(path_head) / editor_name)
+    else:
+        editor_path = editor_name
 
-    # Create editor instance and build command
     editor_class = BaseEditor.get_editor_class(editor_name)
     editor_instance = editor_class(editor_path, editor_args)
     return editor_instance.get_command(location)
