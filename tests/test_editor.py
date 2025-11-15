@@ -13,10 +13,10 @@ from tuick.console import print_command, set_verbose
 from tuick.editor import (
     EditorSubprocess,
     EditorURL,
+    FileLocation,
     get_editor_command,
     get_editor_from_env,
 )
-from tuick.parser import FileLocation
 
 if TYPE_CHECKING:
     from tests.conftest import ConsoleFixture

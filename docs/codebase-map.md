@@ -2,7 +2,7 @@
 
 **Purpose**: Token-efficient reference for understanding tuick architecture and locating code for modifications.
 
-**Last Updated**: 2025-11-13
+**Last Updated**: 2025-11-15
 
 ## Project Overview
 
@@ -16,7 +16,6 @@ Tuick is a command-line tool that runs build commands, parses their output for e
 tuick/
 ├── src/tuick/          # Main source code
 │   ├── cli.py          # Entry point, command routing, modes
-│   ├── parser.py       # Legacy regex-based parsing, block splitting
 │   ├── errorformat.py  # Errorformat subprocess wrapper, JSONL parsing
 │   ├── tool_registry.py # Tool detection, errorformat patterns
 │   ├── ansi.py         # ANSI code stripping
@@ -24,7 +23,7 @@ tuick/
 │   ├── fzf.py          # fzf process management
 │   ├── reload_socket.py # TCP coordination server
 │   ├── monitor.py      # Filesystem watcher (watchexec)
-│   ├── editor.py       # Editor command building
+│   ├── editor.py       # Editor command building, file locations
 │   └── shell.py        # Shell quoting utilities
 ├── tests/              # Test suite
 ├── docs/               # Documentation
@@ -65,71 +64,6 @@ tuick/
 4. _process_raw_and_split() - Parse output into blocks
 5. open_fzf_process() - Launch fzf with blocks
 ```
-
-### parser.py (329 lines)
-**Purpose**: Parse tool output, extract locations, group multi-line errors into blocks
-
-**Data Structures**:
-```python
-@dataclass
-class FileLocation:
-    path: str
-    row: int
-    column: int | None
-
-class State(Enum):
-    START = auto()
-    NORMAL = auto()
-    NOTE_CONTEXT = auto()
-    SUMMARY = auto()
-    PYTEST_BLOCK = auto()
-
-class LineType(Enum):
-    BLANK = auto()
-    LOCATION = auto()
-    MYPY_NOTE = auto()
-    SUMMARY = auto()
-    PYTEST_SEP = auto()
-    RUFF_LOCATION = auto()
-    NORMAL = auto()
-```
-
-**Regex Patterns** (lines 62-91):
-- `LINE_REGEX` - Standard format: `file:line:col: message`
-- `MYPY_NOTE_REGEX` - Mypy notes: `file:line: note:`
-- `SUMMARY_REGEX` - Summary lines (PASSED, FAILED, etc.)
-- `PYTEST_SEP_REGEX` - Pytest separators (`====`, `----`, `____`)
-- `RUFF_LOCATION_REGEX` - Ruff format: `--> file:line:col`
-- `ANSI_REGEX` - Strip ANSI color codes
-
-**Key Functions**:
-- `classify_line(line: str) -> LineType` (lines 116-138)
-  - Determines what type of line this is
-
-- `extract_location_str(line: str) -> str | None` (lines 141-152)
-  - Extracts "file:line:col" string from line
-
-- `strip_ansi(text: str) -> str` (lines 155-158)
-  - Removes ANSI color codes
-
-- `split_blocks(lines: Iterable[str]) -> Iterator[str]` (lines 289-301)
-  - **Main entry point** - splits lines into null-separated blocks
-  - Uses BlockSplitter state machine
-
-- `get_location(text: str) -> FileLocation` (lines 303-329)
-  - Extracts location from user-selected block
-  - Called by select_command()
-
-**BlockSplitter State Machine** (lines 161-286):
-- Maintains state while processing lines
-- Groups related lines into blocks
-- Emits null-separated blocks
-
-**Block Boundary Logic** (lines 216-247):
-- New location → new block
-- State transitions → new block
-- Blank lines → new block (except in summary/pytest)
-- Pytest separators → new block
 
 ### fzf.py (94 lines)
 **Purpose**: Launch and configure fzf process
@@ -194,7 +128,11 @@ reload_command() → send "reload" → wait for "go"
 - Temporary files
 
 ### editor.py (353 lines)
-**Purpose**: Generate editor-specific commands to open files at locations
+**Purpose**: File location data structures and editor-specific command generation
+
+**Data Structures**:
+- `FileLocation` - Dataclass with path, row, column (used by CLI and editor modules)
+- `FileLocationNotFoundError` - Exception for invalid location selections
 
 **Key Function**:
 - `get_editor_command(editor: str, location: FileLocation) -> list[str]`
@@ -401,38 +339,27 @@ reload_command()
 
 ### Current Parsing Logic
 
-**Location**: `parser.py` lines 161-286 (BlockSplitter class)
+**Location**: `errorformat.py` - all parsing now uses errorformat
 
 **Algorithm**:
-1. For each line:
-   - Strip ANSI codes for parsing (but preserve for display)
-   - Classify line type
-   - Extract location if present
-   - Determine if new block should start
-   - Update state machine
-   - Buffer lines until block boundary
-   - Emit block with null separator
+1. Strip ANSI codes while maintaining line mapping
+2. Run errorformat subprocess with tool-specific patterns
+3. Parse JSONL output into ErrorformatEntry objects
+4. Apply tool-specific grouping (mypy, pytest, ruff)
+5. Restore ANSI codes in output
+6. Format as structured blocks
 
-**State Transitions**:
-- `START` → `NORMAL` (on first line)
-- `NORMAL` → `NOTE_CONTEXT` (on mypy note)
-- `NOTE_CONTEXT` → `NORMAL` (on blank or new location)
-- `NORMAL` → `SUMMARY` (on summary line)
-- `SUMMARY` → `START` (on blank)
-- `NORMAL` → `PYTEST_BLOCK` (on pytest separator)
-- `PYTEST_BLOCK` → `START` (on blank)
+**Tool-specific patterns** (tool_registry.py):
+- BUILTIN_TOOLS: Tools with errorformat built-in support
+- CUSTOM_PATTERNS: Custom patterns for unsupported tools
+- OVERRIDE_PATTERNS: Improved patterns for inadequate built-ins
 
 ### Output Format
 
-**Current**: Null-separated blocks (`\0`)
-- Compatible with fzf `--read0`
-- Each block is multiple lines joined with newlines
-- Blocks separated by null byte
-
-**Future**: Structured format with delimiters
-- Use `\x1F` (unit separator) for internal fields
-- Format: `location\x1Fmessage\x1Fmetadata`
-- Still separate blocks with `\0` for fzf
+**Current**: Structured blocks with delimiters
+- Block format: `file\x1fline\x1fcol\x1fend-line\x1fend-col\x1fcontent\0`
+- Blocks separated by null byte (`\0`) for fzf `--read0`
+- fzf config: `--delimiter=\x1f --with-nth=6` to display only content
 
 ## Testing Infrastructure
 
@@ -440,10 +367,11 @@ reload_command()
 
 **Key Test Files**:
 - `test_cli.py` - CLI integration tests
-- `test_parser.py` - Parser and block splitting tests
+- `test_errorformat.py` - Errorformat parsing and block formatting tests
 - `test_editor.py` - Editor command generation tests
 - `test_reload_socket.py` - Coordination server tests
 - `test_monitor.py` - Filesystem watcher tests
+- `test_data.py` - Shared test data constants
 
 **Test Fixtures** (`conftest.py`):
 - `server_with_key` - ReloadSocketServer instance
@@ -468,40 +396,18 @@ reload_command()
 
 ## Future Modifications Guide
 
-### Adding New Error Format Support
+### Adding New Tool Error Format
 
-1. **Define format in registry** (new: `errorformats.py`)
-   ```python
-   ERRORFORMAT_REGISTRY["newtool"] = "%f:%l:%c: %m"
-   ```
+**Location**: `tool_registry.py` and `errorformat.py`
 
-2. **Add tool detection** (`errorformats.py`)
-   ```python
-   # In detect_tool_from_command()
-   if command.startswith("newtool"):
-       return "newtool"
-   ```
-
-3. **Test with real output**
-   ```python
-   # tests/test_errorformats.py
-   def test_newtool_format():
-       assert get_errorformat("newtool") == expected
-   ```
-
-### Modifying Block Splitting Logic
-
-**Location**: `parser.py` lines 161-286
-
-**Current approach**: State machine with regex patterns
-
-**To modify**:
-1. Add new `LineType` enum value if needed
-2. Add regex pattern at module level (lines 62-91)
-3. Update `classify_line()` to recognize new pattern
-4. Update `_should_start_new_block()` for boundary logic
-5. Add state transition in `_update_state()` if needed
-6. Add tests in `test_parser.py`
+**Steps**:
+1. Check if errorformat has built-in support: `errorformat -list`
+2. If yes, add to BUILTIN_TOOLS in `tool_registry.py`
+3. If no, add custom pattern to CUSTOM_PATTERNS
+4. If built-in pattern is inadequate, add override to OVERRIDE_PATTERNS
+5. Test with real tool output using `fmt_ef.py` helper script
+6. Add tool-specific grouping logic to `errorformat.py` if needed (e.g., mypy, pytest)
+7. Add tests in `test_errorformat.py` with actual tool output
 
 ### Adding New CLI Option
 

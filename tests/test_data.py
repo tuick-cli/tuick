@@ -1,26 +1,4 @@
-"""Tests for the parser module."""
-
-from unittest.mock import patch
-
-import pytest
-
-from tuick.ansi import strip_ansi
-from tuick.parser import (
-    BlockSplitter,
-    FileLocation,
-    LineType,
-    classify_line,
-    extract_location_str,
-    get_location,
-    split_blocks,
-)
-
-
-def blocks_from_text(text: str) -> list[str]:
-    """Convert text to list of blocks using split_blocks."""
-    lines = text.splitlines(keepends=True)
-    return "".join(split_blocks(lines)).split("\0")
-
+"""Shared test data for parser and errorformat tests."""
 
 MYPY_BLOCKS = [
     "src/jobsearch/search.py:58: error: Returning Any from function...",
@@ -88,22 +66,6 @@ tests/test_search.py:142:12:142:23: note: See https://mypy.rtfd.io/en/stabl...\
 Found 8 errors in 6 files (checked 20 source files)""",
 ]
 
-
-@pytest.mark.parametrize(
-    "blocks",
-    [
-        MYPY_BLOCKS,
-        MYPY_FANCY_BLOCKS,
-        MYPY_ABSOLUTE_BLOCKS,
-        MYPY_VERY_FANCY_BLOCKS,
-    ],
-)
-def test_split_blocks_mypy(blocks: list[str]) -> None:
-    """Test split_blocks on mypy output."""
-    input_text = "\n".join((*blocks, ""))
-    assert blocks == blocks_from_text(input_text)
-
-
 RUFF_FULL_BLOCKS = [
     '''\
 I001 [*] Import block is un-sorted or un-formatted
@@ -155,17 +117,6 @@ RUFF_CONCISE_BLOCKS = [
 Found 12 errors.
 [*] 3 fixable with the `--fix` option (4 hidden fixes can be enabled wit...""",
 ]
-
-
-@pytest.mark.parametrize(
-    "blocks",
-    [RUFF_FULL_BLOCKS, RUFF_CONCISE_BLOCKS],
-)
-def test_split_blocks_ruff(blocks: list[str]) -> None:
-    """Test split_blocks on Ruff full output format."""
-    input_text = "\n".join((*blocks, ""))
-    assert blocks == blocks_from_text(input_text)
-
 
 PYTEST_AUTO_BLOCKS = [
     """\
@@ -289,86 +240,3 @@ PYTEST_TRICKY_BLOCKS = [
 \x1b[1;32m'src/test.py:1: error: Test'\x1b[m\x1b[0m""",
     "\x1b[31m\x1b[1m___________ test_cli_select_verbose ____________\x1b[0m",
 ]
-
-
-@pytest.mark.parametrize(
-    "blocks",
-    [
-        *(PYTEST_AUTO_BLOCKS, PYTEST_SHORT_BLOCKS),
-        *(PYTEST_LINE_BLOCKS, PYTEST_TRICKY_BLOCKS),
-    ],
-)
-def test_split_blocks_pytest(blocks: list[str]) -> None:
-    """Test split_blocks on Pytest auto traceback format."""
-    input_text = "\n".join((*blocks, ""))
-    assert blocks == blocks_from_text(input_text)
-
-
-@pytest.mark.parametrize(
-    ("block", "expected"),
-    [
-        (MYPY_BLOCKS[0], FileLocation("src/jobsearch/search.py", 58)),
-        (
-            MYPY_FANCY_BLOCKS[0],
-            FileLocation("src/jobsearch/cadremploi_scraper.py", 43, 35),
-        ),
-        (
-            MYPY_ABSOLUTE_BLOCKS[0],
-            FileLocation("/path/to/src/jobsearch/cadremploi_scraper.py", 43),
-        ),
-        (
-            MYPY_VERY_FANCY_BLOCKS[0],
-            FileLocation("src/jobsearch/search.py", 58, 5),
-        ),
-        (
-            RUFF_FULL_BLOCKS[0],
-            FileLocation("src/jobsearch/search_cli.py", 8, 1),
-        ),
-        (
-            RUFF_CONCISE_BLOCKS[0],
-            FileLocation("src/jobsearch/search_cli.py", 8, 1),
-        ),
-        (PYTEST_AUTO_BLOCKS[1], FileLocation("tests/test_search.py", 133)),
-        (PYTEST_AUTO_BLOCKS[2], FileLocation("tests/test_search.py", 142)),
-        (PYTEST_SHORT_BLOCKS[1], FileLocation("tests/test_search.py", 133)),
-        (
-            PYTEST_LINE_BLOCKS[1],
-            FileLocation(
-                "/Users/david/code/jobsearch/tests/test_search.py", 133
-            ),
-        ),
-    ],
-)
-def test_get_location(block: str, expected: FileLocation) -> None:
-    """Extract location from all supported formats."""
-    assert expected == get_location(block)
-
-
-def test_classify_line_with_ansi() -> None:
-    """ANSI codes are removed before matching."""
-    line = "src/test.py:42:\x1b[31m error: Type error\x1b[0m"
-    line_type: LineType | None = None
-
-    def classify_line_wrapper(line: str) -> LineType:
-        nonlocal line_type
-        return (line_type := classify_line(line))
-
-    with patch(
-        "tuick.parser.classify_line", wraps=classify_line_wrapper
-    ) as mock_classify_line:
-        splitter = BlockSplitter()
-        _ = list(splitter.process_line(line))
-    mock_classify_line.assert_called_once_with(strip_ansi(line))
-    assert line_type == LineType.LOCATION
-
-
-def test_extract_location_str_with_ansi() -> None:
-    """ANSI codes are removed before extracting location."""
-    line = "\x1b[1msrc/file.py:10:5: \x1b[31merror message\x1b[0m"
-    assert extract_location_str(line) == "src/file.py:10:5"
-
-
-def test_get_location_with_ansi() -> None:
-    """ANSI codes are removed before extracting location."""
-    block = "\x1b[31mtests/test_example.py:100: ValueError\x1b[0m"
-    assert get_location(block) == FileLocation("tests/test_example.py", 100)

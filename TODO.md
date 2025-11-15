@@ -1,10 +1,5 @@
 # Tuick Task List
 
-- **Remove obsolete parser code and tests**: Move shared test data to
-  tests/test_data.py. Remove legacy parser code (State, LineType,
-  BlockSplitter, split_blocks, split_blocks_auto, get_location). Delete
-  test_parser.py. Update docs. (PLAN.md Tasks 3-6)
-
 - **Build system errorformat patterns**: Replace stub patterns (%C%m, %A%m) with
   proper patterns that parse nested tool output in top mode
 

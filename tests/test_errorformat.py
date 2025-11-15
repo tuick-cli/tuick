@@ -11,7 +11,7 @@ from tuick.errorformat import (
     split_at_markers,
 )
 
-from .test_parser import (
+from .test_data import (
     MYPY_ABSOLUTE_BLOCKS,
     MYPY_BLOCKS,
     MYPY_FANCY_BLOCKS,

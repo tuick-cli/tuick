@@ -30,6 +30,7 @@ from tuick.console import (
     set_verbose,
 )
 from tuick.editor import (
+    FileLocation,
     UnsupportedEditorError,
     get_editor_command,
     get_editor_from_env,
@@ -46,7 +47,6 @@ from tuick.errorformat import (
 )
 from tuick.fzf import FzfUserInterface, open_fzf_process
 from tuick.monitor import MonitorThread
-from tuick.parser import FileLocation
 from tuick.reload_socket import ReloadSocketServer
 from tuick.shell import quote_command
 from tuick.tool_registry import detect_tool, is_build_system, is_known_tool

@@ -11,7 +11,30 @@ from urllib.parse import quote
 if typing.TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from tuick.parser import FileLocation
+
+@dataclass
+class FileLocation:
+    """File location with optional row and column."""
+
+    path: str
+    row: int | None = None
+    column: int | None = None
+
+
+class FileLocationNotFoundError(ValueError):
+    """Error when location pattern not found in selection."""
+
+    def __init__(self, selection: str) -> None:
+        """Initialize with the selection text."""
+        self.selection = selection
+        super().__init__(f"Location pattern not found in: {selection!r}")
+
+    def __rich__(self) -> str:
+        """Rich formatted error message."""
+        return (
+            f"[bold red]Error:[/] Location pattern not found\n"
+            f"[bold]Input:[/] {self.selection!r}"
+        )
 
 
 class EditorCommand:

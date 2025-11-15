@@ -17,8 +17,8 @@ import typer.testing
 from tuick.cli import app
 from tuick.reload_socket import ReloadSocketServer
 
+from .test_data import MYPY_BLOCKS
 from .test_errorformat import Block, BlockList, parse_blocks
-from .test_parser import MYPY_BLOCKS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
