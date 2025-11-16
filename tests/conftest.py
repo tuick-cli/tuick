@@ -1,5 +1,6 @@
 """Common test fixtures."""
 
+import os
 import socket
 from dataclasses import dataclass, field
 from io import StringIO
@@ -46,6 +47,20 @@ class ConsoleFixture:
         if not self._checked:
             output = self._output.getvalue()
             assert output == "", "Unexpected console output"
+
+
+@pytest.fixture(autouse=True)
+def clean_env() -> Iterator[None]:
+    """Remove TUICK environment variables before each test.
+
+    This prevents interference when tests are run from within a tuick session
+    or when environment variables leak between tests.
+    """
+    tuick_vars = [k for k in os.environ if k.startswith("TUICK_")]
+    with patch.dict(os.environ, clear=False):
+        for k in tuick_vars:
+            os.environ.pop(k)
+        yield
 
 
 @pytest.fixture
