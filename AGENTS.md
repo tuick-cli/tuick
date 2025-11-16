@@ -103,6 +103,10 @@
 - Unused parameters: Mark with leading underscore (`_param`) rather than noqa
   comments. More Pythonic and makes intent explicit.
 - Don't start unittest docstrings with "Test"
+- Exception chaining: Use `raise NewException from exc` when re-raising or
+  transforming exceptions in except blocks. Preserves stack trace and makes
+  debugging easier. Example: `except FileNotFoundError as exc: raise
+  CustomError from exc`. Follow ruff B904.
 
 ### Type Hints
 
@@ -228,6 +232,19 @@
   `patch_popen()`, `make_cmd_proc()`, `make_fzf_proc()` etc. Never manually
   construct mocks that helpers already provide. Grep test files for helper
   functions if unsure what exists.
+- Mock simplicity: Avoid over-abstracting mock wrappers. Use patch contexts
+  directly and access `mock.mock_calls` or `mock.call_args_list` in tests.
+  Create helper functions for extracting data from mock_calls if needed, but
+  don't wrap the context manager itself. Example: `get_command_calls_from_mock()`
+  extracts commands from mock_calls, but patch returns unwrapped context.
+- Mock call structure: Each entry in `mock.mock_calls` is a tuple
+  `(name, args, kwargs)`. Use tuple unpacking or indexing: `_name, args, kwargs
+  = mock.mock_calls[0]`. For `call_args_list`, use `call[0]` for args tuple,
+  `call[1]` for kwargs dict.
+- Integration test requirements: Some dependencies (like errorformat) are hard
+  requirements and should NOT be mocked in CLI integration tests. Only mock UI
+  components (fzf) and use real subprocess calls for required tools. This
+  validates actual integration.
 
 ### Test Synchronization
 

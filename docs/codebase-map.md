@@ -2,7 +2,7 @@
 
 **Purpose**: Token-efficient reference for understanding tuick architecture and locating code for modifications.
 
-**Last Updated**: 2025-11-15
+**Last Updated**: 2025-11-16
 
 ## Project Overview
 
@@ -65,14 +65,17 @@ tuick/
 5. open_fzf_process() - Launch fzf with blocks
 ```
 
-### fzf.py (94 lines)
+### fzf.py (120 lines)
 **Purpose**: Launch and configure fzf process
 
-**Key Function**:
-- `open_fzf_process(blocks: Iterable[str], bindings: dict, initial_port: int | None) -> None`
+**Key Functions**:
+- `open_fzf_process(callbacks, user_interface, tuick_server_info, fzf_api_key)`
   - Spawns fzf with `--read0` (null-separated input)
-  - Configures bindings: ctrl-r (reload), enter (select), ctrl-l (load)
+  - Configures bindings: ctrl-r (reload), enter (select), / and ctrl-/ (preview)
   - Uses `--bind` for dynamic command injection
+- `_check_bat_installed()` - Check if bat is available
+- `_get_preview_command()` - Generate bat command or error message
+- `_get_preview_window_config()` - Configure preview visibility
 
 **fzf Configuration**:
 - `--ansi` - Preserve ANSI colors
@@ -80,6 +83,14 @@ tuick/
 - `--tac` - Reverse order (latest first)
 - `--no-sort` - Preserve input order
 - `--bind` - Dynamic key bindings
+- `--preview` - Bat command for syntax-highlighted code preview
+- `--preview-window` - Preview layout (hidden if TUICK_PREVIEW=0)
+
+**Preview Feature**:
+- Uses bat to show syntax-highlighted file at error location
+- Enabled by default, hidden with TUICK_PREVIEW=0
+- Toggle with / or ctrl-/
+- Shows error message if bat not installed
 
 ### reload_socket.py (189 lines)
 **Purpose**: TCP server for coordinating reload operations

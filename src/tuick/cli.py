@@ -165,7 +165,7 @@ def main(  # noqa: PLR0913, C901, PLR0912
         print_entry([Path(sys.argv[0]).name, *sys.argv[1:]])
 
         exclusive_options = sum(
-            [reload, bool(select), start, bool(message), format, top]
+            [reload, select, start, bool(message), format, top]
         )
         if exclusive_options > 1:
             message = (

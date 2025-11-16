@@ -58,7 +58,7 @@ _pytest-agent-opts := _pytest-opts + " -p no:icdiff" + _pytest-diff-opt
 dev: _fail_if_claudecode compile
     #!/usr/bin/env bash -euo pipefail
     {{ _bash-defs }} {{ _check-body }}
-    safe visible {{ _run-dev }} pytest {{ _pytest-opts }}
+    safe visible {{ _run-dev }} tuick --format -- pytest {{ _pytest-opts }}
     end-safe
 
 # Agent workflow: check, test with minimal output
@@ -95,7 +95,9 @@ _fail_if_claudecode:
 [group('dev')]
 [private]
 compile:
-    {{ _run-dev }} -m compileall -q {{ _python-dirs }}
+    {{ _run-dev }} tuick --format \
+    -p '%E*** Error ' -p '%C  File "%f", line %l' -p '%C%m' -p '%Z' \
+    -- python3 -m compileall -q {{ _python-dirs }}
 
 # Compile python files, with less output
 [group('agent')]
@@ -109,7 +111,7 @@ agent-compile:
 # Run test suite
 [group('dev')]
 test *ARGS: _fail_if_claudecode
-    {{ _run-dev }} pytest {{ _pytest-opts }} {{ ARGS }}
+    {{ _run-dev }} tuick --format -- pytest {{ _pytest-opts }} {{ ARGS }}
 
 # Run test suite, with less output
 [group('agent')]
@@ -132,10 +134,11 @@ check: _fail_if_claudecode compile
 
 [private]
 _check-body := '''
-    safe visible $run_dev ruff format --check $python_dirs
-    safe visible $run_dev docformatter --check $python_dirs
-    safe visible $run_dev ruff check --quiet $python_dirs
-    safe visible $run_dev dmypy check $python_dirs
+    tuickf="tuick --format"
+    safe visible $run_dev $tuickf -- ruff format --check $python_dirs
+    safe visible $run_dev $tuickf -p "%E%f" -- docformatter --check $python_dirs
+    safe visible $run_dev $tuickf -- ruff check --quiet $python_dirs
+    safe visible $run_dev $tuickf -f mypy -- dmypy check $python_dirs
 '''
 
 # Auto format and interactive code analysis and style checks

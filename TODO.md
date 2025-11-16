@@ -1,12 +1,18 @@
 # Tuick Task List
 
-- FEAT[high]: Integrate with bat for preview. Possible approaches:
-  1. `tuick --preview bat` as a wrapper to bat
-  2. Hidden data (--with-nth) or invisible delimiters (so the path and line
-     number are in fixed fields)
+- BUG[high]: Fix nested-top communication for "tuick just dev".
+
+- UX[high]: Probe terminal for background color to determine which theme to
+  choose for fzf and bat. Add option --theme, values auto (default), light, dark to override.
+
+- RELEASE 0.1
+
+- Understand why output on exit appears to work correctly in build system mode.
 
 - UX[high]: Add allow_interspersed_args=False to command, so we do not need to
   use -- most of the time.
+
+- Autodetect mypy format for dmypy command
 
 - BUG[med] Errorformat line matching: Current implementation uses dict mapping
   from stripped lines to original ANSI lines. This fails if duplicate stripped

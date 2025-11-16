@@ -9,7 +9,7 @@ import sys
 import typing
 from io import StringIO
 from textwrap import dedent
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any
 from unittest.mock import ANY, Mock, create_autospec, patch
 
 import pytest
@@ -140,7 +140,7 @@ def patch_popen(sequence: list[str], procs: list[Mock]) -> Any:  # noqa: ANN401
         index += 1
         return proc
 
-    return patch("tuick.cli.subprocess.Popen", side_effect=popen_factory)
+    return patch("subprocess.Popen", side_effect=popen_factory)
 
 
 def patch_popen_selective(
@@ -148,35 +148,15 @@ def patch_popen_selective(
 ) -> Any:  # noqa: ANN401
     """Patch Popen to mock specific commands, passthrough others."""
     original_popen = subprocess.Popen
-    calls: list[tuple[list[str], dict[str, typing.Any]]] = []
 
     def popen_factory(args, **kwargs):  # noqa: ANN001, ANN003
-        calls.append((args, kwargs))
         cmd = args[0] if args else ""
         if cmd in mock_map:
             sequence.append("popen")
             return mock_map[cmd]
         return original_popen(args, **kwargs)
 
-    ctx_cli = patch("tuick.cli.subprocess.Popen", side_effect=popen_factory)
-    ctx_ef = patch(
-        "tuick.errorformat.subprocess.Popen", side_effect=popen_factory
-    )
-    ctx_cli.calls = calls  # type: ignore[attr-defined]
-
-    class MultiPatch:
-        def __enter__(self) -> Self:
-            ctx_cli.__enter__()
-            ctx_ef.__enter__()
-            return self
-
-        def __exit__(self, *args):  # noqa: ANN002, ANN204
-            ctx_ef.__exit__(*args)
-            ctx_cli.__exit__(*args)
-
-    result = MultiPatch()
-    result.calls = calls  # type: ignore[attr-defined]
-    return result
+    return patch("subprocess.Popen", side_effect=popen_factory)
 
 
 def get_command_calls(
@@ -184,6 +164,16 @@ def get_command_calls(
 ) -> list[list[str]]:
     """Get argument lists for command from Popen calls."""
     return [c[0] for c in calls if c[0] and c[0][0] == cmd]
+
+
+def get_command_calls_from_mock(mock: Mock, cmd: str) -> list[list[str]]:
+    """Extract command calls matching cmd from mock.mock_calls."""
+    result = []
+    for call in mock.mock_calls:
+        args = call[1]
+        if args and args[0] and args[0][0] == cmd:
+            result.append(args[0])
+    return result
 
 
 def test_cli_default_launches_fzf() -> None:
@@ -649,14 +639,16 @@ def test_errorformat_top_mode() -> None:
 
     mock_map = {"make": cmd_proc, "fzf": fzf_proc}
     with (
-        patch_popen_selective(sequence, mock_map) as popen_ctx,
+        patch_popen_selective(sequence, mock_map) as popen_mock,
         patch("tuick.cli.MonitorThread"),
     ):
         runner.invoke(app, ["--", "make"])
 
-    make_calls = get_command_calls(popen_ctx.calls, "make")
+    make_calls = get_command_calls_from_mock(popen_mock, "make")
     assert len(make_calls) == 1
-    assert "TUICK_PORT" in popen_ctx.calls[0][1]["env"]
+    # Check env from first call: call is (name, args, kwargs)
+    _name, _args, kwargs = popen_mock.mock_calls[0]
+    assert "TUICK_PORT" in kwargs["env"]
 
     expected = format_blocks(
         [
@@ -740,9 +732,14 @@ def test_errorformat_missing_shows_error(
     mypy_lines = [MYPY_BLOCKS[0] + "\n"]
     cmd_proc = make_cmd_proc(sequence, "mypy", mypy_lines)
 
+    def popen_factory(*args, **kwargs):  # noqa: ANN002, ANN003
+        sequence.append("popen")
+        if args[0][0] == "errorformat":
+            raise FileNotFoundError
+        return cmd_proc
+
     with (
-        patch_popen(sequence, [cmd_proc]),
-        patch("tuick.errorformat.shutil.which", return_value=None),
+        patch("subprocess.Popen", side_effect=popen_factory),
         patch.dict("os.environ", {"TUICK_NESTED": "1"}),
     ):
         result = runner.invoke(app, ["--format", "--", "mypy", "src/"])
@@ -780,7 +777,7 @@ def test_custom_pattern_option(console_out: ConsoleFixture) -> None:
     fzf_proc = make_fzf_proc(sequence)
 
     with (
-        patch_popen_selective(sequence, {"fzf": fzf_proc}) as popen_ctx,
+        patch_popen_selective(sequence, {"fzf": fzf_proc}) as popen_mock,
         patch("tuick.cli.MonitorThread"),
     ):
         args = ["-p", "%f:%l: %m", "--", "echo", "file.txt:1: error"]
@@ -789,7 +786,7 @@ def test_custom_pattern_option(console_out: ConsoleFixture) -> None:
     assert result.exit_code == 0
 
     # Verify errorformat called with custom pattern
-    ef_calls = get_command_calls(popen_ctx.calls, "errorformat")
+    ef_calls = get_command_calls_from_mock(popen_mock, "errorformat")
     assert ef_calls == [["errorformat", "-w=jsonl", "%f:%l: %m"]]
 
     # Verify output format with location properly extracted
@@ -808,7 +805,7 @@ def test_format_name_option(console_out: ConsoleFixture) -> None:
     fzf_proc = make_fzf_proc(sequence)
 
     with (
-        patch_popen_selective(sequence, {"fzf": fzf_proc}) as popen_ctx,
+        patch_popen_selective(sequence, {"fzf": fzf_proc}) as popen_mock,
         patch("tuick.cli.MonitorThread"),
     ):
         args = ["-f", "mypy", "--", "echo", "file.py:42: error: Incompatible"]
@@ -817,7 +814,7 @@ def test_format_name_option(console_out: ConsoleFixture) -> None:
     assert result.exit_code == 0
 
     # Verify errorformat uses override patterns (not -name=mypy)
-    ef_calls = get_command_calls(popen_ctx.calls, "errorformat")
+    ef_calls = get_command_calls_from_mock(popen_mock, "errorformat")
     assert len(ef_calls) == 1
     assert ef_calls[0][0] == "errorformat"
     assert ef_calls[0][1] == "-w=jsonl"
@@ -831,3 +828,110 @@ def test_format_name_option(console_out: ConsoleFixture) -> None:
     expected_content = "file.py:42: error: Incompatible"
     expected = BlockList([Block("file.py", "42", content=expected_content)])
     assert actual.format_for_test() == expected.format_for_test()
+
+
+def get_fzf_cmd(popen_mock: Mock) -> list[str]:
+    """Get fzf command from popen mock, asserting it was called once."""
+    fzf_calls = [
+        call for call in popen_mock.call_args_list if "fzf" in call[0][0]
+    ]
+    assert len(fzf_calls) == 1
+    cmd: list[str] = fzf_calls[0][0][0]
+    return cmd
+
+
+def get_option_value(cmd: list[str], option: str) -> str:
+    """Get value of command-line option, asserting it exists."""
+    assert option in cmd
+    option_idx = cmd.index(option)
+    return cmd[option_idx + 1]
+
+
+def has_preview_toggle_binding(fzf_cmd: list[str]) -> bool:
+    """Check if fzf command has preview toggle binding."""
+    bindings = get_option_value(fzf_cmd, "--bind")
+    return "toggle-preview" in bindings
+
+
+def make_preview_test_procs(sequence: list[str]) -> list[Mock]:
+    """Create standard process mocks for preview tests."""
+    cmd_proc = make_cmd_proc(sequence, "command", ["file.py:1: error\n"])
+    errorformat_jsonl = [
+        '{"filename":"file.py","lnum":1,"col":0,"text":"error",'
+        '"lines":["file.py:1: error"]}\n',
+    ]
+    errorformat_proc = make_errorformat_proc(sequence, errorformat_jsonl)
+    fzf_proc = make_fzf_proc(sequence)
+    return [cmd_proc, errorformat_proc, fzf_proc]
+
+
+def test_preview_enabled_by_default_with_bat() -> None:
+    """Preview is enabled by default when bat is installed."""
+    sequence: list[str] = []
+
+    with (
+        patch_popen(sequence, make_preview_test_procs(sequence)) as popen,
+        patch("tuick.cli.MonitorThread"),
+        patch("shutil.which", return_value="/usr/bin/bat"),
+    ):
+        runner.invoke(app, ["--", "flake8", "src/"])
+
+    fzf_cmd = get_fzf_cmd(popen)
+
+    # Verify preview command includes bat
+    preview_cmd = get_option_value(fzf_cmd, "--preview")
+    assert "bat" in preview_cmd
+    assert "--color=always" in preview_cmd
+    assert "{1}" in preview_cmd  # filename field
+    assert "{2}" in preview_cmd  # line number field
+
+    # Verify preview window configuration (visible by default)
+    window_config = get_option_value(fzf_cmd, "--preview-window")
+    assert "right" in window_config or "up" in window_config
+    assert "hidden" not in window_config
+
+    # Verify preview toggle binding exists
+    assert has_preview_toggle_binding(fzf_cmd)
+
+
+def test_preview_disabled_with_env_var() -> None:
+    """Preview starts hidden when TUICK_PREVIEW=0, but can be toggled."""
+    sequence: list[str] = []
+
+    with (
+        patch_popen(sequence, make_preview_test_procs(sequence)) as popen,
+        patch("tuick.cli.MonitorThread"),
+        patch("shutil.which", return_value="/usr/bin/bat"),
+        patch.dict(os.environ, {"TUICK_PREVIEW": "0"}),
+    ):
+        runner.invoke(app, ["--", "flake8", "src/"])
+
+    fzf_cmd = get_fzf_cmd(popen)
+
+    # Verify preview window has "hidden" flag
+    window_config = get_option_value(fzf_cmd, "--preview-window")
+    assert "hidden" in window_config
+
+    # Verify preview toggle binding exists
+    assert has_preview_toggle_binding(fzf_cmd)
+
+
+def test_preview_shows_error_when_bat_not_installed() -> None:
+    """Preview shows error message when bat is not installed."""
+    sequence: list[str] = []
+
+    with (
+        patch_popen(sequence, make_preview_test_procs(sequence)) as popen,
+        patch("tuick.cli.MonitorThread"),
+        patch("shutil.which", return_value=None),
+    ):
+        runner.invoke(app, ["--", "flake8", "src/"])
+
+    fzf_cmd = get_fzf_cmd(popen)
+
+    # Verify preview shows error message
+    preview_cmd = get_option_value(fzf_cmd, "--preview")
+    assert "Preview requires bat" in preview_cmd
+
+    # Verify preview toggle binding exists
+    assert has_preview_toggle_binding(fzf_cmd)

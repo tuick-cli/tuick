@@ -3,7 +3,6 @@
 import functools
 import json
 import re
-import shutil
 import subprocess
 import threading
 import typing
@@ -95,9 +94,6 @@ def run_errorformat(  # noqa: C901
         ErrorformatNotFoundError: If errorformat not in PATH
         subprocess.CalledProcessError: If errorformat fails
     """
-    if shutil.which("errorformat") is None:
-        raise ErrorformatNotFoundError
-
     # Build errorformat command based on configuration
     cmd = ["errorformat", "-w=jsonl"]
     match config:
@@ -116,13 +112,16 @@ def run_errorformat(  # noqa: C901
             else:
                 msg = f"Unknown format: {format_name}"
                 raise AssertionError(msg)
-    proc = subprocess.Popen(
-        cmd,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise ErrorformatNotFoundError from exc
 
     # Stream input to errorformat stdin in background thread
     def write_input() -> None:

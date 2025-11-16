@@ -1,6 +1,7 @@
 """Tuick module that handles the fzf command."""
 
 import os
+import shutil
 import subprocess
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
@@ -22,6 +23,32 @@ class FzfUserInterface:
         """Initialize fzf interface."""
         self.header = quote_command(command)
         self.running_header = f"{self.header} Running..."
+
+
+def _check_bat_installed() -> bool:
+    """Check if bat is installed."""
+    return shutil.which("bat") is not None
+
+
+def _get_preview_command() -> str:
+    """Generate preview command for fzf."""
+    if _check_bat_installed():
+        return (
+            "bat --color=always --style=numbers,grid --highlight-line={2} {1}"
+        )
+    return "echo 'Preview requires bat (https://github.com/sharkdp/bat)'"
+
+
+def _get_preview_window_config() -> str:
+    """Generate preview window configuration."""
+    base_config = (
+        "right,50%,border-line,info,"
+        "<88(top),"  # Responsive, one column on narrow terminals
+        "+{2}/2"  # Center preview on the error line
+    )
+    if os.getenv("TUICK_PREVIEW") != "0":
+        return base_config
+    return f"{base_config},hidden"
 
 
 @contextmanager
@@ -62,6 +89,7 @@ def open_fzf_process(
         "zero:+accept",
         "space:down",
         "backspace:up",
+        "/,ctrl-/:toggle-preview",
     ]
     if theme := os.getenv("TERM_THEME"):
         color_opt = ["--color=" + theme]
@@ -72,6 +100,8 @@ def open_fzf_process(
         *("--no-sort", "--reverse", "--header-border"),
         *("--ansi", *color_opt, "--highlight-line", "--wrap"),
         *("--delimiter=\x1f", "--with-nth=6"),
+        *("--preview", _get_preview_command()),
+        *("--preview-window", _get_preview_window_config()),
         *("--disabled", "--no-input", "--bind"),
         ",".join(fzf_bindings),
     ]
