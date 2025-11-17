@@ -62,6 +62,17 @@ class ProcessTerminatedError(Exception):
     """Raised when a command process is terminated before completing."""
 
 
+def _should_use_top_mode(config: FormatConfig, explicit_top: bool) -> bool:
+    """Check if top-mode should be used based on config and explicit flag."""
+    if explicit_top:
+        return True
+    match config:
+        case FormatName(format_name):
+            return is_build_system(format_name)
+        case CustomPatterns():
+            return False
+
+
 def _create_format_config(
     command: list[str], format_name: str, pattern: list[str] | None
 ) -> FormatConfig:
@@ -163,10 +174,14 @@ def main(  # noqa: PLR0913, C901, PLR0912
             set_verbose()
         print_entry([Path(sys.argv[0]).name, *sys.argv[1:]])
 
-        exclusive_options = sum(
+        exclusive_count = sum(
             [reload, select, start, bool(message), format, top]
         )
-        if exclusive_options > 1:
+        # Allow reload + top together
+        if reload and top:
+            exclusive_count -= 1
+
+        if exclusive_count > 1:
             message = (
                 "Options --reload, --select, --start, --message, --format,"
                 " and --top are mutually exclusive"
@@ -174,12 +189,13 @@ def main(  # noqa: PLR0913, C901, PLR0912
             print_error(None, message)
             raise typer.Exit(1)
 
-        if not exclusive_options and not command:
+        if not exclusive_count and not command:
             print_error(None, "No command specified")
 
         if reload:
             config = _create_format_config(command, format_name, pattern)
-            reload_command(command, config)
+            top_mode = _should_use_top_mode(config, explicit_top=top)
+            reload_command(command, config, top_mode=top_mode)
         elif select:
             select_command(command)
         elif start:
@@ -212,16 +228,10 @@ def main(  # noqa: PLR0913, C901, PLR0912
                     raise typer.Exit(1) from error
             else:
                 # Auto-detect build systems and use top mode
-                match config:
-                    case FormatName(format_name):
-                        if is_build_system(format_name):
-                            list_command(
-                                command, config, verbose=verbose, top_mode=True
-                            )
-                        else:
-                            list_command(command, config, verbose=verbose)
-                    case CustomPatterns():
-                        list_command(command, config, verbose=verbose)
+                top_mode = _should_use_top_mode(config, explicit_top=False)
+                list_command(
+                    command, config, verbose=verbose, top_mode=top_mode
+                )
 
 
 class CallbackCommands:
@@ -430,6 +440,19 @@ def _process_output_and_yield_raw(
     print_verbose("  Command exit:", process.returncode)
 
 
+def _process_output_and_yield_raw_top(
+    process: subprocess.Popen[str],
+    output: typing.TextIO,
+    config: FormatConfig,
+) -> typing.Iterator[str]:
+    """Read process output with top-mode parsing, yield raw blocks."""
+    assert process.stdout
+    for block in _parse_top_mode(config, process.stdout):
+        _write_block_and_maybe_flush(output, block)
+        yield block
+    print_verbose("  Command exit:", process.returncode)
+
+
 def _buffer_chunks(
     raw_iterator: typing.Iterator[str], chunk_size: int = 8192
 ) -> typing.Iterator[str]:
@@ -472,7 +495,9 @@ def start_command() -> None:
     _send_to_tuick_server(f"fzf_port: {fzf_port}", "ok")
 
 
-def reload_command(command: list[str], config: FormatConfig) -> None:
+def reload_command(
+    command: list[str], config: FormatConfig, *, top_mode: bool = False
+) -> None:
     """Notify parent, wait for go, run command and save output."""
     try:
         _send_to_tuick_server("reload", "go")
@@ -488,9 +513,14 @@ def reload_command(command: list[str], config: FormatConfig) -> None:
             sock.sendall(b"save-output\n")
 
             with _create_command_process(command) as process:
-                raw_output = _process_output_and_yield_raw(
-                    process, sys.stdout, config
-                )
+                if top_mode:
+                    raw_output = _process_output_and_yield_raw_top(
+                        process, sys.stdout, config
+                    )
+                else:
+                    raw_output = _process_output_and_yield_raw(
+                        process, sys.stdout, config
+                    )
                 for chunk in _buffer_chunks(raw_output):
                     data_bytes = chunk.encode("utf-8")
                     sock.sendall(f"{len(data_bytes)}\n".encode())

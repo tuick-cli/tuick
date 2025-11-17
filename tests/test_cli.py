@@ -465,6 +465,69 @@ def test_cli_exclusive_options(console_out: ConsoleFixture) -> None:
     assert console_out.getvalue() == expected
 
 
+def test_reload_with_top_allowed(console_out: ConsoleFixture) -> None:
+    """--reload and --top should work together."""
+    with patch("tuick.cli.reload_command") as mock_reload:
+        result = runner.invoke(
+            app, ["--reload", "--top", "--", "ruff", "check"]
+        )
+    # Should NOT fail with mutual exclusivity error
+    assert result.exit_code == 0
+    assert "mutually exclusive" not in console_out.getvalue()
+    # Verify reload_command was called with top_mode=True
+    assert mock_reload.call_count == 1
+    _args, kwargs = mock_reload.call_args
+    assert kwargs["top_mode"] is True
+
+
+def test_reload_top_conflicts_with_select(console_out: ConsoleFixture) -> None:
+    """--reload --top should conflict with --select."""
+    result = runner.invoke(
+        app, ["--reload", "--top", "--select", "foo", "--", "make"]
+    )
+    assert result.exit_code != 0
+    expected = (
+        "Error: Options --reload, --select, --start, --message, --format,"
+        " and --top are mutually exclusive"
+    )
+    assert expected in console_out.getvalue()
+
+
+def test_reload_autodetects_list_mode(console_out: ConsoleFixture) -> None:
+    """Reload auto-detects list mode for ruff (non-build-system)."""
+    with patch("tuick.cli.reload_command") as mock_reload:
+        result = runner.invoke(app, ["--reload", "--", "ruff", "check"])
+    assert result.exit_code == 0
+    # ruff is NOT a build system, should use list mode (top_mode=False)
+    assert mock_reload.call_count == 1
+    _args, kwargs = mock_reload.call_args
+    assert kwargs["top_mode"] is False
+
+
+def test_reload_autodetects_build_system(console_out: ConsoleFixture) -> None:
+    """Reload auto-detects top-mode for just (build system)."""
+    with patch("tuick.cli.reload_command") as mock_reload:
+        result = runner.invoke(app, ["--reload", "--", "just", "check"])
+    assert result.exit_code == 0
+    # just IS a build system, should use top mode (top_mode=True)
+    assert mock_reload.call_count == 1
+    _args, kwargs = mock_reload.call_args
+    assert kwargs["top_mode"] is True
+
+
+def test_reload_explicit_top_forces_mode(console_out: ConsoleFixture) -> None:
+    """Reload with explicit --top forces top-mode for any tool."""
+    with patch("tuick.cli.reload_command") as mock_reload:
+        result = runner.invoke(
+            app, ["--reload", "--top", "--", "ruff", "check"]
+        )
+    assert result.exit_code == 0
+    # Explicit --top forces top_mode even for non-build-system tools
+    assert mock_reload.call_count == 1
+    _args, kwargs = mock_reload.call_args
+    assert kwargs["top_mode"] is True
+
+
 def test_cli_abort_after_initial_load_prints_output(
     console_out: ConsoleFixture,
 ) -> None:

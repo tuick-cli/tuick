@@ -72,6 +72,9 @@
 - Limit lines to 79 columns
 - Write only necessary code for required use cases
 - Do not write speculative and boilerplate code
+- Factor duplicated logic: extract helper functions when same logic appears
+  twice, even for small chunks (5-6 lines). Reduces maintenance burden and
+  ensures consistency
 - All other things being equal, prefer code that takes fewer lines
 - Consider intermediate variables where they make code more compact. For
   command-line options/flags, extract meaningful intermediate lists like
@@ -214,6 +217,11 @@
   format so it's clear when to remove the marker. Example:
   `@pytest.mark.xfail(reason="Task 9: fzf delimiter config not implemented")`
   not generic "feature not ready".
+- Option parsing tests: When testing CLI option routing/parsing, mock the
+  routed command function and verify call arguments, rather than full
+  integration tests. Faster and more focused on the routing logic being tested.
+- Test docstrings: Describe behavior, not command syntax. Keep command names
+  lowercase (e.g., "tuick" not "Tuick"). Focus on what the test verifies.
 
 ### Test Infrastructure
 
@@ -271,6 +279,8 @@
   - Updates to existing rules: changes in the intent, additional details, or
     additional reinforcement
   - New rules, if no existing rule seems appropriate
+- "Remember this" marker: When user says "remember this" or similar, that
+  feedback MUST be added or reinforced in AGENTS.md during retrospective
 
 ## Version Control
 

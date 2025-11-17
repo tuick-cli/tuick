@@ -1,7 +1,5 @@
 # Tuick Task List
 
-- BUG[high]: Fix nested-top communication for "tuick just dev".
-
 - UX[high]: Probe terminal for background color to determine which theme to
   choose for fzf and bat. Add option --theme, values auto (default), light, dark to override.
 
