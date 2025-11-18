@@ -2,7 +2,7 @@
 
 **Purpose**: Token-efficient reference for understanding tuick architecture and locating code for modifications.
 
-**Last Updated**: 2025-11-16
+**Last Updated**: 2025-11-18
 
 ## Project Overview
 

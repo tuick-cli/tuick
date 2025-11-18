@@ -11,6 +11,7 @@ Interactive error browser for command-line tools, powered by [`fzf`] and [`error
 - **Manual reload**: Press `r` in fzf to re-run the command
 - **Auto-reload**: Automatic refresh on file changes using [`watchexec`]
 - **Build system support**: Parse mixed output from make, just, etc.
+- **Theme detection**: Automatic dark/light theme detection for fzf and bat
 
 ## Quick Start
 
@@ -32,6 +33,7 @@ Default mode when a compiler or checker is detected. Runs the command, parses ou
 tuick mypy .        # Auto-detect mypy
 tuick ruff check    # Auto-detect ruff
 tuick flake8        # Auto-detect flake8
+tuick pytest        # Auto-detect pytest
 ```
 
 ### Top Mode
@@ -67,7 +69,29 @@ check:
 
 If `TUICK_PORT` is not set, streams tool output unchanged (passthrough mode).
 
-## Auto-reload on File Changes
+## Command-Line Options
+
+### Top-Level Options
+
+- `-f`, `--format-name NAME` - Override autodetected errorformat name
+- `-p`, `--pattern PATTERN` - Custom errorformat pattern(s), can be specified multiple times
+- `--top` - Force top mode (override build system detection)
+- `-v`, `--verbose` - Show verbose output
+- `--theme THEME` - Color theme: `dark`, `light`, `bw`, `auto` (default: `auto`)
+
+**Note**: `-f/--format-name` and `-p/--pattern` are mutually exclusive.
+
+### Internal Options
+
+These options are for internal use by tuick when communicating between processes:
+
+- `--reload` - Run command and output blocks (called by fzf binding)
+- `--select` - Open editor at error location (called by fzf binding)
+- `--message TEXT` - Log a message (used for event logging)
+- `--start` - Notify fzf port to parent process
+- `--format` - Format mode: parse and output structured blocks
+
+## Auto-Reload on File Changes
 
 Tuick automatically monitors the filesystem and reloads on changes using [`watchexec`]:
 
@@ -76,6 +100,66 @@ Tuick automatically monitors the filesystem and reloads on changes using [`watch
 - Debounces rapid changes
 - No configuration needed
 
+## Theme Detection and Configuration
+
+Tuick supports automatic theme detection for fzf and bat preview:
+
+### Theme Priority Order
+
+1. `--theme` CLI option (if not `auto`)
+2. `CLI_THEME` environment variable
+3. `NO_COLOR` environment variable (disables colors)
+4. Automatic detection via:
+   - OSC 11 terminal query (most accurate)
+   - `COLORFGBG` environment variable
+   - Default to `dark`
+
+### Theme Options
+
+- `dark` - Dark theme (dark background)
+- `light` - Light theme (light background)
+- `bw` - Black and white (no colors)
+- `auto` - Automatic detection (default)
+
+### Environment Variables
+
+- `CLI_THEME` - Force theme: `dark`, `light`, or `bw`
+- `NO_COLOR` - If set and non-empty, disables colors
+- `COLORFGBG` - Terminal foreground/background colors
+- `BAT_THEME` - Bat theme for syntax highlighting (preserved if set)
+- `TUICK_PREVIEW` - Set to `0` to start with preview window hidden
+
+## Editor Integration
+
+Tuick opens files at error locations in your editor. Editor is selected in this order:
+
+1. `TUICK_EDITOR` - Tuick-specific editor
+2. `EDITOR` - Standard editor variable
+3. `VISUAL` - Alternative editor variable
+
+### Custom Editor Templates
+
+For editors not automatically recognized, use these environment variables:
+
+- `TUICK_EDITOR_LINE_COLUMN` - Template for line and column: `{editor} {file}:{line}:{col}`
+- `TUICK_EDITOR_LINE` - Template for line only: `{editor} {file}:{line}`
+
+Examples:
+
+```bash
+export TUICK_EDITOR="code"
+export TUICK_EDITOR_LINE_COLUMN="{editor} -g {file}:{line}:{col}"
+```
+
+## Environment Variables (Internal)
+
+These variables are set by tuick for communication with commands:
+
+- `TUICK_PORT` - Port number for tuick coordination server
+- `TUICK_API_KEY` - Authentication key for tuick server
+- `TUICK_LOG_FILE` - Path to shared log file for all tuick processes
+- `FORCE_COLOR` - Set to `1` for build commands when theme is not black-and-white
+
 ## Dependencies
 
 **Required**:
@@ -83,26 +167,46 @@ Tuick automatically monitors the filesystem and reloads on changes using [`watch
 - [`errorformat`] - Error output parser (from reviewdog project)
 - [`watchexec`] - Filesystem watcher for auto-reload
 
+**Optional**:
+- [`bat`] - Syntax-highlighted preview in fzf (highly recommended)
+
 Install:
 
 ```bash
-# fzf
-brew install fzf
+# macOS (via Homebrew)
+brew install fzf watchexec bat
 
-# errorformat
+# errorformat (requires Go)
 go install github.com/reviewdog/errorformat/cmd/errorformat@latest
-
-# watchexec
-brew install watchexec
 ```
 
 ## Supported Tools
 
-Currently supported tools with errorformat patterns:
-- **mypy**: Type checker (custom multi-line error patterns)
-- **flake8**: Python linter (built-in errorformat pattern)
+Tuick supports all tools with [errorformat built-in patterns]. Run `errorformat -list` to see available formats:
 
-Additional tools can be added by extending `tool_registry.py`.
+```
+ansible-lint, bandit, black, brakeman, buf, cargo-check, clippy, dotenv-linter,
+dotnet, erb-lint, eslint, eslint-compact, fasterer, flake8, go-consistent,
+golangci-lint, golint, gosec, govet, haml-lint, hlint, isort, luacheck,
+misspell, msbuild, mypy, pep8, phpstan, protolint, psalm, puppet-lint,
+pydocstyle, reek, remark-lint, rubocop, sbt, sbt-scalastyle, scalac, scalastyle,
+slim-lint, sorbet, standardjs, standardrb, staticcheck, stylelint, tsc, tslint,
+typos, yamllint
+```
+
+Additionally, tuick provides enhanced patterns for:
+
+- **mypy** - Enhanced multi-line patterns with column support
+- **ruff** - Enhanced patterns for both concise and full formats
+- **pytest** - Custom multi-line patterns for test failures
+
+Build systems (stub support - groups output into info blocks):
+- **make**, **just**, **cmake**, **ninja**
+
+Additional tools can be added by:
+- Extending `tool_registry.py` for custom patterns
+- Providing custom patterns via `-p/--pattern` option
+- Using `-f/--format-name` to reference any errorformat built-in format
 
 ## Recommended: dmypy
 
@@ -116,5 +220,7 @@ tuick dmypy run .
 
 [`fzf`]: https://junegunn.github.io/fzf/
 [`errorformat`]: https://github.com/reviewdog/errorformat
+[errorformat built-in patterns]: https://github.com/reviewdog/errorformat
 [`watchexec`]: https://github.com/watchexec/watchexec
 [`dmypy`]: https://mypy.readthedocs.io/en/stable/mypy_daemon.html
+[`bat`]: https://github.com/sharkdp/bat
