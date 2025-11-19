@@ -187,3 +187,30 @@ _format-body := '''
     safe visible $run_dev ruff format $python_dirs
     safe visible $run_dev docformatter --in-place $python_dirs
 '''
+
+# Create release: tag, build tarball, upload to PyPI and GitHub
+[group('dev')]
+release: _fail_if_claudecode
+    #!/usr/bin/env bash -euo pipefail
+    {{ _bash-defs }}
+    ERROR="{{ style('error') }}"
+    GREEN=$'\033[32m'  # ansi code for green
+    fail () { echo "${ERROR}$*${NORMAL}"; exit 1; }
+    version=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+    tag="v$version"
+    tarball="tuick-$version.tar.gz"
+    echo "Preparing release $tag"
+    visible just agent
+    git diff-index --quiet HEAD -- \
+    || fail "Error: uncommitted changes"
+    git rev-parse "$tag" >/dev/null 2>&1 \
+    && fail "Error: tag $tag already exists"
+    visible git tag -a "$tag" -m "Release $version"
+    visible git push origin "$tag"
+    visible git archive --format=tar.gz --prefix="tuick-$version/" \
+        -o "$tarball" "$tag"
+    visible uv build
+    visible uv publish
+    visible gh release create "$tag" "$tarball" dist/* \
+        --title "Release $version" --generate-notes
+    echo "${GREEN}Release $tag complete${NORMAL}"
