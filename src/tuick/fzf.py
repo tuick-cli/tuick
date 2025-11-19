@@ -93,7 +93,7 @@ def open_fzf_process(
         f"start:+execute-silent({callbacks.start_command})",
         f"load:change-header({user_interface.header})",
         *binding_verbose("load", "LOAD", plus=True),
-        f"enter,right:execute({select_action})",
+        f"enter:execute({select_action})",
         f"r:change-header({user_interface.running_header})",
         *binding_verbose("r", "RELOAD", plus=True),
         f"r:+reload({callbacks.reload_command})",

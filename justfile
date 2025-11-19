@@ -41,6 +41,7 @@ pytest-agent-filter () {
     do [[ $line =~ ^===+\ FAILURES\ ===+$ ]] && break; done
     cat
 }
+tuickf="tuick --format"
 '''
 # Pytest options.
 # Run with full-diff=true for full diffs.
@@ -58,7 +59,7 @@ _pytest-agent-opts := _pytest-opts + " -p no:icdiff" + _pytest-diff-opt
 dev: _fail_if_claudecode compile
     #!/usr/bin/env bash -euo pipefail
     {{ _bash-defs }} {{ _check-body }}
-    safe visible {{ _run-dev }} tuick --format -- pytest {{ _pytest-opts }}
+    safe visible $run_dev $tuickf -- pytest {{ _pytest-opts }}
     end-safe
 
 # Agent workflow: check, test with minimal output
@@ -91,13 +92,18 @@ _fail_if_claudecode:
         exit 1
     fi
 
+_python_format := \
+"""-p '%E*** Error ' -p '%C  File "%f", line %l' -p '%C%m' -p '%Z'"""
+
 # Compile python files, quick test for valid syntax
 [group('dev')]
 [private]
 compile:
-    {{ _run-dev }} tuick --format \
-    -p '%E*** Error ' -p '%C  File "%f", line %l' -p '%C%m' -p '%Z' \
-    -- python3 -m compileall -q {{ _python-dirs }}
+    #!/usr/bin/env bash -euo pipefail
+    {{ _bash-defs }}
+    compile="python3 -m compileall -q $python_dirs"
+    show $run_dev $tuickf -- $compile
+    $run_dev $tuickf {{ _python_format }} -- $compile
 
 # Compile python files, with less output
 [group('agent')]
@@ -134,24 +140,11 @@ check: _fail_if_claudecode compile
 
 [private]
 _check-body := '''
-    tuickf="tuick --format"
     safe visible $run_dev $tuickf -- ruff format --check $python_dirs
     safe visible $run_dev $tuickf -p "%E%f" -- docformatter --check $python_dirs
     safe visible $run_dev $tuickf -- ruff check --quiet $python_dirs
     safe visible $run_dev $tuickf -f mypy -- dmypy check $python_dirs
 '''
-
-# Auto format and interactive code analysis and style checks
-[group('dev')]
-tuick: _fail_if_claudecode compile
-    {{ _run-dev }} tuick -- just _tuick
-
-[group('dev')]
-_tuick:
-    #!/usr/bin/env bash -euo pipefail
-    {{ _bash-defs }} {{ _format-body }} {{ _check-body }}
-    safe visible {{ _run-dev }} pytest {{ _pytest-opts }}
-    end-safe
 
 # Report TODO, FIXME, XXX, HACK comments
 [group('dev')]

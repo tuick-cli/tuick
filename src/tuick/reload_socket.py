@@ -59,7 +59,6 @@ class ReloadRequestHandler(socketserver.StreamRequestHandler):
             except ValueError:
                 self.wfile.write(b"error: invalid port\n")
             else:
-                # TODO: only print if --verbose is passed
                 print_verbose("FZF_PORT:", port_str)
 
         elif command_line == "reload":
