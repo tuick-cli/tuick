@@ -211,6 +211,6 @@ release: _fail_if_claudecode
         -o "$tarball" "$tag"
     visible uv build
     visible uv publish
-    visible gh release create "$tag" "$tarball" dist/* \
-        --title "Release $version" --generate-notes
+    visible gh release create "$tag" --title "Release $version" \
+        --generate-notes
     echo "${GREEN}Release $tag complete${NORMAL}"
