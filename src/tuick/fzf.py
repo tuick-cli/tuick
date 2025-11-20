@@ -103,6 +103,8 @@ def open_fzf_process(
         "space:down",
         "backspace:up",
         "/,ctrl-/:toggle-preview",
+        "home:first",
+        "end:last",
     ]
     color_opt = (
         ["--no-color"]
