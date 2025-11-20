@@ -58,12 +58,16 @@ wheels = [
 ]
 
 [[package]]
-name = "icdiff"
-version = "2.0.7"
+name = "docformatter"
+version = "1.7.7"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fa/e4/43341832be5f2bcae71eb3ef08a07aaef9b74f74fe0b3675f62bd12057fe/icdiff-2.0.7.tar.gz", hash = "sha256:f79a318891adbf59a45e3a7694f5e1f18c5407065264637072ac8363b759866f", size = 16394, upload-time = "2023-08-21T15:00:55.742Z" }
+dependencies = [
+    { name = "charset-normalizer" },
+    { name = "untokenize" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2a/7b/ee08cb5fe2627ed0b6f0cc4a1c6be6c9c71de5a3e9785de8174273fc3128/docformatter-1.7.7.tar.gz", hash = "sha256:ea0e1e8867e5af468dfc3f9e947b92230a55be9ec17cd1609556387bffac7978", size = 26587, upload-time = "2025-05-11T04:54:04.356Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7c/2a/b3178baa75a3ec75a33588252296c82a1332d2b83cd01061539b74bde9dd/icdiff-2.0.7-py3-none-any.whl", hash = "sha256:f05d1b3623223dd1c70f7848da7d699de3d9a2550b902a8234d9026292fb5762", size = 17018, upload-time = "2023-08-21T15:00:54.634Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/b4/a7ec1eaee86761a9dbfd339732b4706db3c6b65e970c12f0f56cfcce3dcf/docformatter-1.7.7-py3-none-any.whl", hash = "sha256:7af49f8a46346a77858f6651f431b882c503c2f4442c8b4524b920c863277834", size = 33525, upload-time = "2025-05-11T04:54:03.353Z" },
 ]
 
 [[package]]
@@ -176,15 +180,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pprintpp"
-version = "0.4.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/06/1a/7737e7a0774da3c3824d654993cf57adc915cb04660212f03406334d8c0b/pprintpp-0.4.0.tar.gz", hash = "sha256:ea826108e2c7f49dc6d66c752973c3fc9749142a798d6b254e1e301cfdbc6403", size = 17995, upload-time = "2018-07-01T01:42:34.87Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4e/d1/e4ed95fdd3ef13b78630280d9e9e240aeb65cc7c544ec57106149c3942fb/pprintpp-0.4.0-py2.py3-none-any.whl", hash = "sha256:b6b4dcdd0c0c0d75e4d7b2f21a9e933e5b2ce62b26e1a54537f9651ae5a5c01d", size = 16952, upload-time = "2018-07-01T01:42:36.496Z" },
-]
-
-[[package]]
 name = "pygments"
 version = "2.19.2"
 source = { registry = "https://pypi.org/simple" }
@@ -207,20 +202,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a3/5c/00a0e072241553e1a7496d638deababa67c5058571567b92a7eaa258397c/pytest-8.4.2.tar.gz", hash = "sha256:86c0d0b93306b961d58d62a4db4879f27fe25513d4b969df351abdddb3c30e01", size = 1519618, upload-time = "2025-09-04T14:34:22.711Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a8/a4/20da314d277121d6534b3a980b29035dcd51e6744bd79075a6ce8fa4eb8d/pytest-8.4.2-py3-none-any.whl", hash = "sha256:872f880de3fc3a5bdc88a11b39c9710c3497a547cfa9320bc3c5e62fbf272e79", size = 365750, upload-time = "2025-09-04T14:34:20.226Z" },
-]
-
-[[package]]
-name = "pytest-icdiff"
-version = "0.9"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "icdiff" },
-    { name = "pprintpp" },
-    { name = "pytest" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/0c/66e1e2590e98f4428e374a3b6448dc086a908d15b1e24b914539d13b7ac4/pytest-icdiff-0.9.tar.gz", hash = "sha256:13aede616202e57fcc882568b64589002ef85438046f012ac30a8d959dac8b75", size = 7110, upload-time = "2023-12-05T11:18:30.192Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e2/e1/cafe1edf7a30be6fa1bbbf43f7af12b34682eadcf19eb6e9f7352062c422/pytest_icdiff-0.9-py3-none-any.whl", hash = "sha256:efee0da3bd1b24ef2d923751c5c547fbb8df0a46795553fba08ef57c3ca03d82", size = 4994, upload-time = "2023-12-05T11:18:28.572Z" },
 ]
 
 [[package]]
@@ -310,7 +291,6 @@ dev = [
     { name = "isort" },
     { name = "mypy", extra = ["mypyc"] },
     { name = "pytest" },
-    { name = "pytest-icdiff" },
     { name = "ruff" },
     { name = "types-requests" },
 ]
@@ -327,7 +307,6 @@ dev = [
     { name = "isort", specifier = ">=7.0.0" },
     { name = "mypy", extras = ["mypyc"], specifier = ">=1.18.2" },
     { name = "pytest", specifier = ">=8.4.2" },
-    { name = "pytest-icdiff", specifier = ">=0.9" },
     { name = "ruff", specifier = ">=0.14.2" },
     { name = "types-requests", specifier = ">=2.32.4.20250913" },
 ]

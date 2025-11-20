@@ -26,6 +26,9 @@ import sys
 
 show_lines = "--lines" in sys.argv
 
+# ruff: noqa: T201
+
+
 for line in sys.stdin:
     if not line.strip():
         continue

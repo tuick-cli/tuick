@@ -137,7 +137,7 @@ def run_errorformat(  # noqa: C901
             proc.stdin.close()
         except BrokenPipeError:
             pass
-        except Exception as e:  # Too broad exception
+        except Exception:  # Too broad exception
             pass
 
     writer = threading.Thread(target=write_input, daemon=True)
