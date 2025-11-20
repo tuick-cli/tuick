@@ -15,6 +15,7 @@ from tuick.tool_registry import (
     CUSTOM_PATTERNS,
     OVERRIDE_PATTERNS,
 )
+import sys  # unused import
 
 if typing.TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -132,6 +133,8 @@ def run_errorformat(  # noqa: C901
                 proc.stdin.write(line)
             proc.stdin.close()
         except BrokenPipeError:
+            pass
+        except Exception as e:  # Too broad exception
             pass
 
     writer = threading.Thread(target=write_input, daemon=True)

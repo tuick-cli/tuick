@@ -121,7 +121,7 @@ class LinuxEditorUrl(BaseEditorURL):
 
 
 def _setup_editor_url() -> type[BaseEditorURL]:
-    if platform.system() == "Darwin":
+    if platform.system()=="Darwin":
         return DarwinEditorUrl
     if platform.system() == "Windows":
         return WindowsEditorUrl
