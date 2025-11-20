@@ -1,10 +1,9 @@
-.PHONY: all formatcheck check mypy pytest
-all: formatcheck check mypy pytest
-formatcheck:
-	uv run tuick --format -- ruff format --check
-check:
-	uv run tuick --format -- ruff check --quiet # --output-format=concise
+.PHONY: check ruff mypy pytest
+check: ruff mypy pytest
+ruff:
+	tuick --format -f ruff -- uv run ruff check --quiet --output-format=concise
 mypy:
-	uv run tuick --format -- dmypy run
+	tuick --format -f mypy -- uv run mypy
 pytest:
-	uv run tuick --format -- pytest --tb=short # --no-header --no-summary --exitfirst --failed-first
+	tuick --format -f pytest -- uv run pytest --tb=short --no-header \
+	--exitfirst --failed-first
