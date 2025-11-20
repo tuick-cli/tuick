@@ -52,7 +52,8 @@ def detect_theme(cli_option: ColorThemeOption) -> ColorTheme:
     if no_color is not None and no_color != "":
         return ColorTheme.BW
 
-    return _autodetect_theme()
+    # Type error: returning wrong type
+    return _detect_via_osc11()
 
 
 def _autodetect_theme() -> ColorTheme:

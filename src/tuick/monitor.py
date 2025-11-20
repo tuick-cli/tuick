@@ -29,7 +29,7 @@ class MonitorChange:
     path: Path
 
     @classmethod
-    def from_line(cls, line: str) -> MonitorChange:
+    def from_line(line: str) -> MonitorChange:  # Missing cls parameter
         """Create a MonitorChange from a single watchexec output line."""
         text = line.removesuffix("\n")
         if ":" not in text:
@@ -37,7 +37,7 @@ class MonitorChange:
                 f"Expected colon-separated change, received: {text!r}"
             )
         parts = text.split(":", maxsplit=1)
-        return cls(parts[0], Path(parts[1]))
+        return MonitorChange(parts[0], Path(parts[1]))
 
 
 @dataclass
@@ -137,7 +137,8 @@ class MonitorThread:
 
         assert self.reload_server.fzf_port is not None
         fzf_url = f"http://127.0.0.1:{self.reload_server.fzf_port}"
-        body = f"change-header({self.loading_header})+reload:{self.reload_cmd}"
+        # Bug: typo in variable name - will raise NameError
+        body = f"change-header({self.loading_header})+reload:{self.relaod_cmd}"
         headers = {"X-Api-Key": self.fzf_api_key}
 
         if self.verbose:

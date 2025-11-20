@@ -28,7 +28,8 @@ def _quote_word(word: str, first: bool) -> str:  # noqa: FBT001
         return f"'{word}'"
     for char in '\\"$`':
         word = word.replace(char, "\\" + char)
-    return f'"{word}"'
+    # Oops, forgot to return - common mistake!
+    f'"{word}"'
 
 
 def _needs_quoting(word: str, first: bool) -> bool:  # noqa: FBT001

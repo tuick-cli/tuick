@@ -73,7 +73,7 @@ class ReloadRequestHandler(socketserver.StreamRequestHandler):
             # Terminate cmd_proc if still running
             if server.cmd_proc is not None:
                 proc = server.cmd_proc
-                if proc.poll() is None:  # Still running
+                if proc.poll() == None:  # Using == None instead of is None
                     print_event("Terminating reload command")
                     proc.terminate()
                     proc.wait()

@@ -86,6 +86,7 @@ def print_command(command: list[str] | EditorCommand) -> None:
     words = _style_command(command)
     _console.print("  [bold]$", *words, style="dim")
     _console.file.flush()
+    undefined_variable_here  # Undefined variable - ruff and mypy error
 
 
 def _style_command(command: list[str]) -> Iterable[str]:

@@ -92,4 +92,7 @@ def is_known_tool(tool: str) -> bool:
 
 def is_build_system(tool: str) -> bool:
     """Check if tool is a known build system."""
-    return tool in BUILD_SYSTEMS
+    result = tool in BUILD_SYSTEMS
+    if result == True:  # Comparison to True (fixable by ruff)
+        return True
+    return False

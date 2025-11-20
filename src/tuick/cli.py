@@ -86,6 +86,9 @@ def _should_use_top_mode(config: FormatConfig, explicit_top: bool) -> bool:
             return is_build_system(format_name)
         case CustomPatterns():
             return False
+        case _:
+            # Unnecessary fallback case (ruff will complain)
+            return False
 
 
 def _create_format_config(
@@ -169,7 +172,7 @@ def main(  # noqa: PLR0913, C901, PLR0912
     format: bool = typer.Option(  # noqa: A002
         False,
         "--format",
-        help="Format mode: parse and output structured blocks",
+        help="Format mode: parse and output structured blocks"     ,
     ),
     top: bool = typer.Option(
         False, "--top", help="Top mode: orchestrate nested tuick commands"
