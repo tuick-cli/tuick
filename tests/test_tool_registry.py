@@ -8,11 +8,13 @@ def test_detect_tool() -> None:
     assert detect_tool(["ruff", "check"]) == "ruff"
     assert detect_tool(["/usr/bin/ruff", "check"]) == "ruff"
     assert detect_tool(["./venv/bin/mypy", "."]) == "mypy"
+    assert detect_tool(["dmypy", "run"]) == "mypy"
 
 
 def test_is_known_tool() -> None:
     """is_known_tool() returns True for known tools."""
     assert is_known_tool("ruff")
+    assert is_known_tool("mypy")
 
 
 def test_not_is_known_tool() -> None:
@@ -26,6 +28,7 @@ def test_is_build_system() -> None:
     assert is_build_system("just")
     assert is_build_system("cmake")
     assert is_build_system("ninja")
+    assert is_build_system(detect_tool(["gmake"]))
 
 
 def test_not_is_build_system() -> None:

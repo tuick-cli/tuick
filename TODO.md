@@ -1,13 +1,7 @@
 # Tuick Task List
 
-- RELEASE 0.1
-
-- Understand why output on exit appears to work correctly in build system mode.
-
-- UX[high]: Add allow_interspersed_args=False to command, so we do not need to
-  use -- most of the time.
-
-- Autodetect mypy format for dmypy command
+- BUG[med] Do not output block delimiters if a tool produces no output, so
+  consecutive commands without output are grouped in one block.
 
 - BUG[med] Errorformat line matching: Current implementation uses dict mapping
   from stripped lines to original ANSI lines. This fails if duplicate stripped

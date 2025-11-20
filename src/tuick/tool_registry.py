@@ -72,10 +72,17 @@ KNOWN_TOOLS: set[str] = (
 # Build systems that orchestrate nested tuick commands
 BUILD_SYSTEMS: set[str] = {"make", "just", "cmake", "ninja"}
 
+# Command aliases: commands that should use another tool's errorformat
+COMMAND_ALIASES: dict[str, str] = {
+    "dmypy": "mypy",
+    "gmake": "make",
+}
+
 
 def detect_tool(command: list[str]) -> str:
-    """Extract tool name from command, stripping path prefix if present."""
-    return Path(command[0]).name
+    """Extract tool name, stripping path prefix and resolving aliases."""
+    tool = Path(command[0]).name
+    return COMMAND_ALIASES.get(tool, tool)
 
 
 def is_known_tool(tool: str) -> bool:
