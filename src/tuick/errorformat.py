@@ -9,6 +9,7 @@ import typing
 from dataclasses import dataclass, replace
 
 from tuick.ansi import strip_ansi
+from tuick.console import print_command
 from tuick.tool_registry import (
     BUILTIN_TOOLS,
     CUSTOM_PATTERNS,
@@ -65,11 +66,10 @@ class ErrorformatEntry:
 @functools.cache
 def get_errorformat_builtin_formats() -> set[str]:
     """Get list of formats supported by errorformat -list (cached)."""
+    command = ["errorformat", "-list"]
+    print_command(command)
     result = subprocess.run(
-        ["errorformat", "-list"],
-        capture_output=True,
-        text=True,
-        check=True,
+        command, capture_output=True, text=True, check=True
     )
     return {
         line.split(maxsplit=1)[0]
@@ -113,6 +113,7 @@ def run_errorformat(  # noqa: C901
                 msg = f"Unknown format: {format_name}"
                 raise AssertionError(msg)
     try:
+        print_command(cmd)
         proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
