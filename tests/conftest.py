@@ -64,6 +64,12 @@ def clean_env() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def reset_verbose() -> None:
+    """Reset verbose flag before each test."""
+    tuick.console._verbose = False
+
+
+@pytest.fixture(autouse=True)
 def patch_theme_detection() -> Iterator[None]:
     """Patch theme detection for all tests.
 
