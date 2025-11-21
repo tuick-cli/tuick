@@ -11,6 +11,7 @@ from textwrap import dedent
 from typing import TYPE_CHECKING, Any
 from unittest.mock import ANY, Mock, create_autospec, patch
 
+import pytest
 import typer.testing
 
 import tuick
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
     # click.testing.Result
     from click.testing import Result as TestingResult
 
-    from .conftest import ConsoleFixture
+    from .conftest import ConsoleFixture, ServerFixture
 
 
 class CliRunner(typer.testing.CliRunner):
@@ -592,7 +593,7 @@ def test_errorformat_simple_mode() -> None:
 
     with (
         patch(
-            "tuick.cli.subprocess.Popen",
+            "subprocess.Popen",
             side_effect=[cmd_proc, ef_proc, fzf_proc],
         ) as mock,
         patch("tuick.cli.MonitorThread"),
@@ -668,7 +669,7 @@ def test_errorformat_format_passthrough() -> None:
     cmd_proc.wait.side_effect = lambda: write_and_wait()
 
     with (
-        patch("tuick.cli.subprocess.Popen", side_effect=[cmd_proc]) as mock,
+        patch("subprocess.Popen", side_effect=[cmd_proc]) as mock,
         patch.dict("os.environ", {}, clear=False),
     ):
         result = runner.invoke(app, ["--format", "--", "mypy", "src/"])
@@ -677,7 +678,22 @@ def test_errorformat_format_passthrough() -> None:
     assert result.stdout == "".join(mypy_lines)
 
 
-def test_errorformat_format_structured() -> None:
+@pytest.fixture
+def nested_tuick(
+    server_with_key: ServerFixture,
+) -> Iterator[ReloadSocketServer]:
+    """Start server and set TUICK_PORT and TUICK_API_KEY env vars."""
+    env = {
+        "TUICK_PORT": str(server_with_key.port),
+        "TUICK_API_KEY": server_with_key.api_key,
+    }
+    with patch.dict("os.environ", env):
+        yield server_with_key.server
+
+
+def test_errorformat_format_structured(
+    nested_tuick: ReloadSocketServer,
+) -> None:
     r"""Format mode with TUICK_PORT set: output \x02blocks\x03."""
     sequence: list[str] = []
     mypy_lines = [MYPY_BLOCKS[0] + "\n", MYPY_BLOCKS[1] + "\n"]
@@ -692,12 +708,8 @@ def test_errorformat_format_structured() -> None:
     ]
     ef_proc = make_errorformat_proc(sequence, ef_jsonl)
 
-    with (
-        patch(
-            "tuick.cli.subprocess.Popen", side_effect=[cmd_proc, ef_proc]
-        ) as mock,
-        patch.dict("os.environ", {"TUICK_PORT": "1"}),
-    ):
+    with patch("subprocess.Popen", side_effect=[cmd_proc, ef_proc]) as mock:
+        nested_tuick.begin_output()
         result = runner.invoke(app, ["--format", "--", "mypy", "src/"])
 
     assert mock.call_args_list[1].kwargs["stdout"] == subprocess.PIPE
@@ -715,7 +727,7 @@ def test_errorformat_format_structured() -> None:
 
 
 def test_errorformat_missing_shows_error(
-    console_out: ConsoleFixture,
+    console_out: ConsoleFixture, nested_tuick: ReloadSocketServer
 ) -> None:
     """Show clear error when errorformat not installed and --format used."""
     sequence: list[str] = []
@@ -730,7 +742,6 @@ def test_errorformat_missing_shows_error(
 
     with (
         patch("subprocess.Popen", side_effect=popen_factory),
-        patch.dict("os.environ", {"TUICK_PORT": "1"}),
     ):
         result = runner.invoke(app, ["--format", "--", "mypy", "src/"])
 

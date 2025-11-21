@@ -50,7 +50,7 @@
   sequences.
 
 - REF[med]Refactor error handling: replace print_error + raise typer.Exit with
-  custom exceptions, catch in main and print with rich. (TRY301)
+  custom exceptions, catch in main and print with rich.
 
 - REF[med]:Fix uses of generic mocks where specs could be used.
 

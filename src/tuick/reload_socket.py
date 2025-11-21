@@ -75,24 +75,34 @@ class ReloadRequestHandler(socketserver.StreamRequestHandler):
             # Signal go to proceed with reload
             self.wfile.write(b"go\n")
 
-        elif command_line == "save-output":
-            # Receive output via streaming protocol and save to temp file
-            # File ownership transferred to server on commit, not closed here
-            temp_file = tempfile.TemporaryFile(  # noqa: SIM115
-                mode="w+", encoding="utf-8"
-            )
+        elif command_line == "begin-output":
+            try:
+                self.server.begin_output()
+            except Exception as error:
+                self.wfile.write(f"error: {error}\n".encode())
+                raise
+            else:
+                self.wfile.write(b"ok\n")
 
+        elif command_line == "end-output":
+            try:
+                self.server.end_output()
+            except Exception as error:
+                self.wfile.write(f"error: {error}\n".encode())
+                raise
+            else:
+                self.wfile.write(b"ok\n")
+
+        elif command_line == "save-output":
             while True:
                 # Read length line or 'end' marker
                 line = self.rfile.readline().decode().strip()
 
                 if not line:
-                    # Connection closed before 'end', discard temp file
-                    temp_file.close()
+                    # Connection closed before 'end', nevermind.
                     return
 
                 if line == "end":
-                    server.commit_saved_output_file(temp_file)
                     self.wfile.write(b"ok\n")
                     break
 
@@ -100,19 +110,22 @@ class ReloadRequestHandler(socketserver.StreamRequestHandler):
                 try:
                     length = int(line)
                 except ValueError:
-                    # Invalid format, discard temp file
-                    temp_file.close()
-                    self.wfile.write(b"error: invalid length\n")
+                    self.wfile.write(
+                        f"error: invalid length: {line!r}\n".encode()
+                    )
                     return
 
                 # Read exactly 'length' bytes
                 data = self.rfile.read(length)
                 if len(data) != length:
-                    # Short read - connection closed, discard temp file
-                    temp_file.close()
+                    # Short read - connection closed
                     return
 
-                temp_file.write(data.decode("utf-8"))
+                try:
+                    self.server.save_output_chunk(data.decode("utf-8"))
+                except Exception as error:
+                    self.wfile.write(f"error: {error}\n".encode())
+                    raise
 
         elif command_line == "shutdown":
             # For test teardown only
@@ -138,6 +151,7 @@ class ReloadSocketServer(socketserver.TCPServer):
         self.should_shutdown = False
         self._thread: threading.Thread | None = None
         self.saved_output_file: io.TextIOWrapper | None = None
+        self._current_output_file: io.TextIOWrapper | None = None
         self._output_file_lock = threading.Lock()
         self.termination_queue: queue.Queue[bool] = queue.Queue()
 
@@ -160,13 +174,33 @@ class ReloadSocketServer(socketserver.TCPServer):
             api_key=self.api_key,
         )
 
-    def commit_saved_output_file(self, file: io.TextIOWrapper) -> None:
-        """Atomically commit saved output file, closing previous if exists."""
-        file.seek(0)
+    def begin_output(self) -> None:
+        """Begin saving output to temp file."""
         with self._output_file_lock:
+            if self._current_output_file is not None:
+                # Previously interrupted command output
+                self._current_output_file.close()
+            # Temporary file is closed on begin_output and end_output
+            self._current_output_file = tempfile.TemporaryFile(  # noqa: SIM115
+                mode="w+", encoding="utf-8"
+            )
+
+    def end_output(self) -> None:
+        """End saving output to temp file."""
+        with self._output_file_lock:
+            assert self._current_output_file is not None
+            file_ = self._current_output_file
+            self._current_output_file = None
             if self.saved_output_file is not None:
                 self.saved_output_file.close()
-            self.saved_output_file = file
+            self.saved_output_file = file_
+            file_.seek(0)
+
+    def save_output_chunk(self, chunk: str) -> None:
+        """Save chunk of output to temp file."""
+        with self._output_file_lock:
+            assert self._current_output_file is not None
+            self._current_output_file.write(chunk)
 
     def get_saved_output_file(self) -> io.TextIOWrapper | None:
         """Get saved output file handle at position 0, ready for reading."""

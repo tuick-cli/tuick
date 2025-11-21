@@ -2,12 +2,15 @@
 
 import socket
 import subprocess
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 from unittest.mock import Mock
 
 from tuick.console import set_verbose
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from .conftest import ConsoleFixture, ServerFixture
 
 
@@ -112,6 +115,14 @@ def test_server_rejects_unknown_command(
     assert response == "error: unknown command"
 
 
+@contextmanager
+def _connect_to_tuick_server(server: ServerFixture) -> Iterator[socket.socket]:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.connect(("127.0.0.1", server.port))
+        sock.sendall(f"secret: {server.api_key}\n".encode())
+        yield sock
+
+
 def test_server_save_output_protocol(
     server_with_key: ServerFixture,
 ) -> None:
@@ -119,10 +130,12 @@ def test_server_save_output_protocol(
 
     Uses streaming protocol with length+data pairs.
     """
+    with _connect_to_tuick_server(server_with_key) as sock:
+        sock.sendall(b"begin-output\n")
+        assert sock.recv(1024) == b"ok\n"
+
     # Send save-output command with streaming protocol
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.connect(("127.0.0.1", server_with_key.port))
-        sock.sendall(f"secret: {server_with_key.api_key}\n".encode())
+    with _connect_to_tuick_server(server_with_key) as sock:
         sock.sendall(b"save-output\n")
 
         # Send first chunk: length + data
@@ -137,10 +150,11 @@ def test_server_save_output_protocol(
 
         # Send end marker
         sock.sendall(b"end\n")
+        assert sock.recv(1024) == b"ok\n"
 
-        response = sock.recv(1024).decode().strip()
-
-    assert response == "ok"
+    with _connect_to_tuick_server(server_with_key) as sock:
+        sock.sendall(b"end-output\n")
+        assert sock.recv(1024) == b"ok\n"
 
     # Verify saved output can be retrieved
     output_file = server_with_key.server.get_saved_output_file()
@@ -156,17 +170,19 @@ def test_server_save_output_empty(
 
     save-output followed immediately by end.
     """
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.connect(("127.0.0.1", server_with_key.port))
-        sock.sendall(f"secret: {server_with_key.api_key}\n".encode())
-        sock.sendall(b"save-output\n")
+    with _connect_to_tuick_server(server_with_key) as sock:
+        sock.sendall(b"begin-output\n")
+        assert sock.recv(1024) == b"ok\n"
 
+    with _connect_to_tuick_server(server_with_key) as sock:
+        sock.sendall(b"save-output\n")
         # Send end marker immediately (no data chunks)
         sock.sendall(b"end\n")
+        assert sock.recv(1024) == b"ok\n"
 
-        response = sock.recv(1024).decode().strip()
-
-    assert response == "ok"
+    with _connect_to_tuick_server(server_with_key) as sock:
+        sock.sendall(b"end-output\n")
+        assert sock.recv(1024) == b"ok\n"
 
     # Verify empty output is saved
     output_file = server_with_key.server.get_saved_output_file()
@@ -180,9 +196,11 @@ def test_server_save_output_connection_closed_before_end(
 ) -> None:
     """Server discards output if connection closes before 'end' marker."""
     # Send save-output but close connection before sending 'end'
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.connect(("127.0.0.1", server_with_key.port))
-        sock.sendall(f"secret: {server_with_key.api_key}\n".encode())
+    with _connect_to_tuick_server(server_with_key) as sock:
+        sock.sendall(b"begin-output\n")
+        assert sock.recv(1024) == b"ok\n"
+
+    with _connect_to_tuick_server(server_with_key) as sock:
         sock.sendall(b"save-output\n")
 
         # Send some data

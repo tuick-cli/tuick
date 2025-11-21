@@ -5,14 +5,13 @@ text editor to provide fluid, keyboard-friendly, access to code error
 locations.
 """
 
-import contextlib
 import os
 import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import typing
+from contextlib import ExitStack, contextmanager
 from io import StringIO
 from pathlib import Path
 from subprocess import PIPE, STDOUT
@@ -58,11 +57,13 @@ from tuick.theme import (
 )
 from tuick.tool_registry import detect_tool, is_build_system, is_known_tool
 
+if typing.TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator
+
 app = typer.Typer()
 
 # ruff: noqa: FBT001 FBT003 Typer API uses boolean arguments for flags
 # ruff: noqa: B008 function-call-in-default-argument
-# ruff: noqa: TRY301 Error handling refactoring in TODO.md
 
 
 def version_callback(value: bool) -> None:
@@ -241,18 +242,21 @@ def main(  # noqa: PLR0913, C901, PLR0912
             tuick_port = os.environ.get("TUICK_PORT")
             if tuick_port:
                 # Output structured blocks (nested behavior)
-                try:
-                    cmd_proc = _create_command_process(command)
-                    with cmd_proc:
-                        assert cmd_proc.stdout is not None
-                        blocks = parse_with_errorformat(
-                            config, cmd_proc.stdout
+                with (
+                    _save_raw_to_server() as save_raw,
+                    _create_command_process(command) as cmd_proc,
+                ):
+                    assert cmd_proc.stdout is not None
+                    try:
+                        raw_lines = _iter_raw_lines_and_save(
+                            cmd_proc.stdout, save_raw
                         )
+                        blocks = parse_with_errorformat(config, raw_lines)
                         for chunk in wrap_blocks_with_markers(blocks):
                             _write_block_and_maybe_flush(sys.stdout, chunk)
-                except ErrorformatNotFoundError as error:
-                    print_error(None, str(error))
-                    raise typer.Exit(1) from error
+                    except ErrorformatNotFoundError as error:
+                        print_error(None, str(error))
+                        raise typer.Exit(1) from error
             else:
                 # Auto-detect build systems and use top mode
                 top_mode = _should_use_top_mode(config, explicit_top=False)
@@ -335,7 +339,7 @@ def list_command(  # noqa: C901, PLR0913, PLR0915
     )
     user_interface = FzfUserInterface(command)
 
-    with contextlib.ExitStack() as stack:
+    with ExitStack() as stack:
         # Create tuick reload coordination server
         reload_server = ReloadSocketServer()
         reload_server.start()
@@ -354,30 +358,23 @@ def list_command(  # noqa: C901, PLR0913, PLR0915
         monitor.start()
         stack.callback(monitor.stop)
 
-        # Run command, save raw output to temp file, and stream blocks to fzf
-        temp_file = stack.enter_context(
-            tempfile.TemporaryFile(mode="w+", encoding="utf-8")
-        )
-
+        # Run command, save raw output to server, and stream blocks to fzf
+        reload_server.begin_output()
         cmd_proc = _create_command_process(
             command, (server_info.port, server_info.api_key)
         )
         stack.enter_context(cmd_proc)
         reload_server.cmd_proc = cmd_proc
-
         assert cmd_proc.stdout is not None
-        stdout = cmd_proc.stdout
 
-        # Wrapper to save raw output while feeding to split_blocks
-        def raw_and_split() -> typing.Iterator[str]:
-            for line in stdout:
-                temp_file.write(line)
-                yield line
+        def save_raw(chunk: str) -> None:
+            reload_server.save_output_chunk(chunk)
 
         if top_mode:
-            chunks = _parse_top_mode(config, raw_and_split())
+            chunks = _parse_top_mode(config, cmd_proc.stdout, save_raw)
         else:
-            chunks = parse_with_errorformat(config, raw_and_split())
+            raw_lines = _iter_raw_lines_and_save(cmd_proc.stdout, save_raw)
+            chunks = parse_with_errorformat(config, raw_lines)
 
         try:
             # Read first chunk to check if there's any output
@@ -385,7 +382,7 @@ def list_command(  # noqa: C901, PLR0913, PLR0915
         except StopIteration:
             # No output, don't start fzf
             _wait_command(cmd_proc)
-            temp_file.close()
+            reload_server.end_output()
             return
 
         with open_fzf_process(
@@ -397,19 +394,16 @@ def list_command(  # noqa: C901, PLR0913, PLR0915
         ) as fzf_proc:
             assert fzf_proc.stdin is not None
 
-            # Write first chunk to fzf stdin
+            # Write all chunks to fzf
             _write_block_and_maybe_flush(fzf_proc.stdin, first_chunk)
-
-            # Continue writing blocks to fzf stdin
             for chunk in chunks:
                 _write_block_and_maybe_flush(fzf_proc.stdin, chunk)
 
+            reload_server.end_output()
             fzf_proc.stdin.close()
 
             # Wait for command process before fzf exits
             _wait_command(cmd_proc)
-
-        reload_server.commit_saved_output_file(temp_file)
 
         if fzf_proc.returncode == 130:
             # User abort - print saved output if available
@@ -426,24 +420,30 @@ def list_command(  # noqa: C901, PLR0913, PLR0915
             sys.exit(1)
 
 
-def _send_to_tuick_server(message: str, expected: str) -> None:
-    """Send authenticated message to tuick server and verify response."""
+@contextmanager
+def _connect_to_tuick_server() -> typing.Iterator[socket.socket]:
+    """Connect to tuick server and yield socket."""
     tuick_port = os.environ.get("TUICK_PORT")
     tuick_api_key = os.environ.get("TUICK_API_KEY")
 
     if not tuick_port or not tuick_api_key:
-        message = "Missing environment variable: TUICK_PORT or TUICK_API_KEY"
-        print_error(None, message)
+        print_error(None, "Missing TUICK_PORT or TUICK_API_KEY")
         raise typer.Exit(1)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect(("127.0.0.1", int(tuick_port)))
-        sock.sendall(f"secret: {tuick_api_key}\n{message}\n".encode())
-        response = sock.recv(1024).decode().strip()
+        sock.sendall(f"secret: {tuick_api_key}\n".encode())
+        yield sock
 
-    if response != expected:
-        print_error(None, "Server response:", response)
-        raise typer.Exit(1)
+
+def _send_to_tuick_server(message: str, expected: str) -> None:
+    """Send authenticated message to tuick server and verify response."""
+    with _connect_to_tuick_server() as sock:
+        sock.sendall(f"{message}\n".encode())
+        response = sock.recv(1024).decode().strip()
+        if response != expected:
+            print_error(None, "Server response:", response)
+            raise typer.Exit(1)
 
 
 def _create_command_process(
@@ -468,35 +468,9 @@ def _create_command_process(
     )
 
 
-def _process_output_and_yield_raw(
-    process: subprocess.Popen[str],
-    output: typing.TextIO,
-    config: FormatConfig,
-) -> typing.Iterator[str]:
-    """Read process output, write blocks to output, yield raw output."""
-    assert process.stdout
-    for block in parse_with_errorformat(config, process.stdout):
-        _write_block_and_maybe_flush(output, block)
-        yield block
-    print_verbose("  Command exit:", process.returncode)
-
-
-def _process_output_and_yield_raw_top(
-    process: subprocess.Popen[str],
-    output: typing.TextIO,
-    config: FormatConfig,
-) -> typing.Iterator[str]:
-    """Read process output with top-mode parsing, yield raw blocks."""
-    assert process.stdout
-    for block in _parse_top_mode(config, process.stdout):
-        _write_block_and_maybe_flush(output, block)
-        yield block
-    print_verbose("  Command exit:", process.returncode)
-
-
 def _buffer_chunks(
-    raw_iterator: typing.Iterator[str], chunk_size: int = 8192
-) -> typing.Iterator[str]:
+    raw_iterator: Iterator[str], chunk_size: int = 8192
+) -> Iterator[str]:
     """Buffer raw output for efficient socket transmission."""
     accumulator = StringIO()
     for raw in raw_iterator:
@@ -536,42 +510,54 @@ def start_command() -> None:
     _send_to_tuick_server(f"fzf_port: {fzf_port}", "ok")
 
 
+def _iter_raw_lines_and_save(
+    lines: Iterable[str], save_raw: Callable[[str], None]
+) -> Iterator[str]:
+    for line in lines:
+        save_raw(line)
+        yield line
+
+
+@contextmanager
+def _save_raw_to_server() -> Iterator[Callable[[str], None]]:
+    with _connect_to_tuick_server() as sock:
+        # TODO: buffering
+        sock.sendall(b"save-output\n")
+
+        def save_raw(raw: str) -> None:
+            sock.sendall(f"{len(raw)}\n".encode())
+            sock.sendall(raw.encode())
+
+        yield save_raw
+        sock.sendall(b"end\n")
+        response = sock.recv(1024).decode().strip()
+        if response != "ok":
+            print_error(None, "Server response:", response)
+            raise typer.Exit(1)
+
+
 def reload_command(
     command: list[str], config: FormatConfig, *, top_mode: bool = False
 ) -> None:
     """Notify parent, wait for go, run command and save output."""
     try:
         _send_to_tuick_server("reload", "go")
-        tuick_port = os.environ.get("TUICK_PORT")
-        tuick_api_key = os.environ.get("TUICK_API_KEY")
-        if not tuick_port or not tuick_api_key:
-            print_error(None, "Missing TUICK_PORT or TUICK_API_KEY")
-            raise typer.Exit(1)
+        _send_to_tuick_server("begin-output", "ok")
+        with (
+            _save_raw_to_server() as save_raw,
+            _create_command_process(command) as proc,
+        ):
+            assert proc.stdout is not None
+            if top_mode:
+                for block in _parse_top_mode(config, proc.stdout, save_raw):
+                    _write_block_and_maybe_flush(sys.stdout, block)
+            else:
+                raw_lines = _iter_raw_lines_and_save(proc.stdout, save_raw)
+                for block in parse_with_errorformat(config, raw_lines):
+                    _write_block_and_maybe_flush(sys.stdout, block)
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect(("127.0.0.1", int(tuick_port)))
-            sock.sendall(f"secret: {tuick_api_key}\n".encode())
-            sock.sendall(b"save-output\n")
+        print_verbose("  Command exit:", proc.returncode)
 
-            with _create_command_process(command) as process:
-                if top_mode:
-                    raw_output = _process_output_and_yield_raw_top(
-                        process, sys.stdout, config
-                    )
-                else:
-                    raw_output = _process_output_and_yield_raw(
-                        process, sys.stdout, config
-                    )
-                for chunk in _buffer_chunks(raw_output):
-                    data_bytes = chunk.encode("utf-8")
-                    sock.sendall(f"{len(data_bytes)}\n".encode())
-                    sock.sendall(data_bytes)
-
-            sock.sendall(b"end\n")
-            response = sock.recv(1024).decode().strip()
-            if response != "ok":
-                print_error(None, "Server response:", response)
-                raise typer.Exit(1)
     except Exception as error:
         print_error("Reload error:", error)
         raise
@@ -651,10 +637,13 @@ def format_command(command: list[str], config: FormatConfig) -> None:
 
     # Nested mode: parse with errorformat and output structured blocks
     try:
-        cmd_proc = _create_command_process(command)
-        with cmd_proc:
+        with (
+            _save_raw_to_server() as save_raw,
+            _create_command_process(command) as cmd_proc,
+        ):
             assert cmd_proc.stdout is not None
-            blocks = parse_with_errorformat(config, cmd_proc.stdout)
+            raw_lines = _iter_raw_lines_and_save(cmd_proc.stdout, save_raw)
+            blocks = parse_with_errorformat(config, raw_lines)
             for chunk in wrap_blocks_with_markers(blocks):
                 _write_block_and_maybe_flush(sys.stdout, chunk)
     except ErrorformatNotFoundError as error:
@@ -672,14 +661,19 @@ def top_command(
 
 
 def _parse_top_mode(
-    config: FormatConfig, lines: typing.Iterable[str]
-) -> typing.Iterator[str]:
-    """Parse top mode output with two-layer algorithm."""
+    config: FormatConfig, lines: Iterable[str], save_raw: Callable[[str], None]
+) -> Iterator[str]:
+    """Parse top mode output with two-layer algorithm.
+
+    This function requires a save_raw callback, because the input lines to save
+    are delimited by markers.
+    """
     for is_nested, content in split_at_markers(lines):
         if is_nested:
             yield content
-        elif content.strip():
-            yield from parse_with_errorformat(config, [content])
+        elif content:
+            save_raw(content)
+            yield from parse_with_errorformat(config, content.splitlines())
 
 
 if __name__ == "__main__":
