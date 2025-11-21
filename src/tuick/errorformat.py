@@ -435,6 +435,12 @@ def split_at_markers(lines: Iterable[str]) -> Iterator[tuple[bool, str]]:
 
 def wrap_blocks_with_markers(blocks: Iterable[str]) -> Iterator[str]:
     r"""Wrap blocks with \x02 and \x03 markers."""
+    blocks = iter(blocks)
+    try:
+        first = next(blocks)
+    except StopIteration:
+        return
     yield "\x02"
+    yield first
     yield from blocks
     yield "\x03"
