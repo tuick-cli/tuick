@@ -8,8 +8,10 @@ import threading
 import typing
 from dataclasses import dataclass, replace
 
+from rich.markup import escape
+
 from tuick.ansi import strip_ansi
-from tuick.console import print_command
+from tuick.console import is_verbose, print_command, print_verbose
 from tuick.tool_registry import (
     BUILTIN_TOOLS,
     CUSTOM_PATTERNS,
@@ -59,7 +61,7 @@ class ErrorformatEntry:
     end_col: int | None
     lines: list[str]
     text: str
-    type: str
+    type: str | None
     valid: bool
 
 
@@ -129,6 +131,7 @@ def run_errorformat(  # noqa: C901
         assert proc.stdin is not None
         try:
             for line in input_lines:
+                print_verbose("    <", escape(repr(line)))
                 proc.stdin.write(line)
             proc.stdin.close()
         except BrokenPipeError:
@@ -143,7 +146,7 @@ def run_errorformat(  # noqa: C901
         if not line.strip():
             continue
         data = json.loads(line)
-        yield ErrorformatEntry(
+        entry = ErrorformatEntry(
             filename=data.get("filename", ""),
             lnum=data.get("lnum") or None,
             col=data.get("col") or None,
@@ -151,9 +154,11 @@ def run_errorformat(  # noqa: C901
             end_col=data.get("end_col") or None,
             lines=data.get("lines", []),
             text=data.get("text", ""),
-            type=data.get("type", ""),
+            type=chr(data["type"]) if data.get("type") else None,
             valid=data.get("valid", False),
         )
+        _report_errorformat_entry(entry)
+        yield entry
 
     writer.join()
     proc.wait()
@@ -163,6 +168,26 @@ def run_errorformat(  # noqa: C901
         raise subprocess.CalledProcessError(
             proc.returncode, cmd, stderr=stderr
         )
+
+
+def _report_errorformat_entry(entry: ErrorformatEntry) -> None:
+    if is_verbose():
+        words = [f"f={entry.filename!r}"]
+        if entry.lnum is not None:
+            words.append(f"l={entry.lnum!r}")
+        if entry.col is not None:
+            words.append(f"c={entry.col!r}")
+        if entry.end_lnum is not None:
+            words.append(f"el={entry.end_lnum!r}")
+        if entry.end_col is not None:
+            words.append(f"ec={entry.end_col!r}")
+        if entry.type:
+            words.append(f"t={entry.type}")
+        if entry.valid is not None:
+            words.append(f"v={entry.valid!r}")
+        if len(entry.lines) > 0:
+            words.append(f"#={len(entry.lines)!r}")
+        print_verbose("    >", escape(" ".join(words)))
 
 
 def group_entries_by_location(  # noqa: C901, PLR0912

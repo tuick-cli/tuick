@@ -270,7 +270,7 @@ def test_cli_reload_option(console_out: ConsoleFixture) -> None:
     ef_jsonl = [
         '{"filename":"src/test.py","lnum":1,"col":0,'
         '"lines":["src/test.py:1: error: Test"],"text":"Test",'
-        '"type":"E","valid":true}\n'
+        f'"type":{ord("e")},"valid":true}}\n'
     ]
     ef_proc = make_errorformat_proc(sequence, ef_jsonl)
 
