@@ -136,7 +136,7 @@ class ReloadRequestHandler(socketserver.StreamRequestHandler):
             self.wfile.write(b"error: unknown command\n")
 
 
-class ReloadSocketServer(socketserver.TCPServer):
+class ReloadSocketServer(socketserver.ThreadingTCPServer):
     """TCP server for reload coordination with authentication."""
 
     allow_reuse_address = True
