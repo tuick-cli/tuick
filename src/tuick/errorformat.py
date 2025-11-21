@@ -162,6 +162,7 @@ def run_errorformat(  # noqa: C901
 
     writer.join()
     proc.wait()
+    print_verbose("    errorformat exit:", proc.returncode)
 
     if proc.returncode != 0:
         stderr = proc.stderr.read() if proc.stderr else ""
