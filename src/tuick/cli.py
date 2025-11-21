@@ -381,7 +381,7 @@ def list_command(  # noqa: C901, PLR0913, PLR0915
             first_chunk = next(chunks)
         except StopIteration:
             # No output, don't start fzf
-            _wait_command(cmd_proc)
+            _wait_initial_command(cmd_proc)
             reload_server.end_output()
             return
 
@@ -403,7 +403,7 @@ def list_command(  # noqa: C901, PLR0913, PLR0915
             fzf_proc.stdin.close()
 
             # Wait for command process before fzf exits
-            _wait_command(cmd_proc)
+            _wait_initial_command(cmd_proc)
 
         if fzf_proc.returncode == 130:
             # User abort - print saved output if available
@@ -495,7 +495,7 @@ def _write_block_and_maybe_flush(output: typing.IO[str], block: str) -> None:
         output.flush()
 
 
-def _wait_command(process: subprocess.Popen[str]) -> None:
+def _wait_initial_command(process: subprocess.Popen[str]) -> None:
     """Wait for command process and optionally log exit code."""
     process.wait()
     print_verbose("  Initial command exit:", process.returncode)
