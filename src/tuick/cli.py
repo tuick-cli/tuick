@@ -196,7 +196,8 @@ def main(  # noqa: PLR0913, C901, PLR0912
 ) -> None:
     """Tuick: Text User Interface for Compilers and checkers."""
     with tuick.console.setup_log_file():
-        if verbose:
+        if verbose or os.environ.get("TUICK_VERBOSE"):
+            os.environ["TUICK_VERBOSE"] = "1"
             set_verbose()
         print_entry([Path(sys.argv[0]).name, *sys.argv[1:]])
 
