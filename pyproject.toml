@@ -20,7 +20,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-tuick = "tuick.cli:app"
+"tuick.dev" = "tuick.cli:app"
 
 [dependency-groups]
 dev = [
