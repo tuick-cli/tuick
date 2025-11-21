@@ -139,22 +139,20 @@ def setup_log_file() -> Iterator[None]:
         try:
             yield
         finally:
-            while chunk := read_file.read(64 * 1024):
-                sys.stderr.write(chunk)
             _console.file = sys.stderr
+            if read_file:
+                while chunk := read_file.read(64 * 1024):
+                    sys.stderr.write(chunk)
 
 
 @contextmanager
-def _open_log_file() -> Iterator[tuple[IO[str], IO[str]]]:
+def _open_log_file() -> Iterator[tuple[IO[str], IO[str] | None]]:
     env_path = os.environ.get(TUICK_LOG_FILE)
     if env_path:
         # Open the log file if it is set in TUICK_LOG_FILE
         try:
-            with (
-                Path(env_path).open("a") as append_file,
-                Path(env_path).open("r") as read_file,
-            ):
-                yield append_file, read_file
+            with Path(env_path).open("a") as append_file:
+                yield append_file, None
         except OSError as error:
             print_error("Error opening log file:", error)
             raise SystemExit(1) from error
