@@ -75,7 +75,7 @@ agent *ARGS: agent-compile
 # Clean build files
 [group('dev')]
 clean:
-    rm -rf .venv */__pycache__ */*/__pycache__ build dist */*.so */*/*.so
+    rm -rf .venv */__pycache__ */*/__pycache__ build dist list */*.so */*/*.so
 
 # Clean non-build caches and run files
 [group('dev')]
@@ -143,7 +143,7 @@ _check-body := '''
     safe visible $run_dev $tuickf -- ruff format --check $python_dirs
     safe visible $run_dev $tuickf -p "%E%f" -- docformatter --check $python_dirs
     safe visible $run_dev $tuickf -- ruff check --quiet $python_dirs
-    safe visible $run_dev $tuickf -f mypy -- dmypy check $python_dirs
+    safe visible $run_dev $tuickf -f mypy -- mypy
 '''
 
 # Report TODO, FIXME, XXX, HACK comments
@@ -166,7 +166,7 @@ _agent-check-body := '''
     || { echo 'Try "just format"'; status=false; }
     safe quiet $run_dev docformatter --check $python_dirs
     safe quiet $run_dev ruff check --quiet --output-format=concise $python_dirs
-    safe quiet $run_dev dmypy check $python_dirs
+    safe quiet $run_dev mypy
 '''
 
 # Ruff auto-fix
@@ -198,7 +198,6 @@ release: _fail_if_claudecode
     fail () { echo "${ERROR}$*${NORMAL}"; exit 1; }
     version=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
     tag="v$version"
-    tarball="tuick-$version.tar.gz"
     echo "Preparing release $tag"
     visible just agent
     git diff-index --quiet HEAD -- \
@@ -207,8 +206,6 @@ release: _fail_if_claudecode
     && fail "Error: tag $tag already exists"
     visible git tag -a "$tag" -m "Release $version"
     visible git push origin "$tag"
-    visible git archive --format=tar.gz --prefix="tuick-$version/" \
-        -o "$tarball" "$tag"
     visible uv build
     visible uv publish
     visible gh release create "$tag" --title "Release $version" \
