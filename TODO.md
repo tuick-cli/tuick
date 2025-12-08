@@ -1,8 +1,5 @@
 # Tuick Task List
 
-- TEST[med]: Add test for TUICK_VERBOSE environment inheritance - verify
-  --verbose sets TUICK_VERBOSE=1 for child processes.
-
 - TEST[med]: Test nested tuick verbosity output - verify bottom tuick
   (TUICK_LOG_FILE set) appends to log but doesn't dump to stderr on exit.
 

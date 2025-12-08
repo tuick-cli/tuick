@@ -452,6 +452,68 @@ def test_cli_select_verbose_no_location(console_out: ConsoleFixture) -> None:
         mock_run.assert_not_called()
 
 
+def test_verbose_propagates_to_child_processes(
+    console_out: ConsoleFixture,
+) -> None:
+    """--verbose propagates to nested tuick via TUICK_VERBOSE env var."""
+    sequence: list[str] = []
+    make_lines = [
+        "compiling...\n",
+        "\x02src/a.py\x1f10\x1f5\x1f\x1f\x1ferror msg\0\x03",
+    ]
+    cmd_proc = make_cmd_proc(sequence, "make", make_lines)
+    fzf_proc = make_fzf_proc(sequence)
+    mock_map = {"make": cmd_proc, "fzf": fzf_proc}
+
+    # Capture env passed to make, then invoke nested tuick with that env
+    captured_env: dict[str, str] = {}
+    original_popen = subprocess.Popen
+
+    def capture_and_mock(args, **kwargs):  # noqa: ANN001, ANN003
+        cmd = args[0] if args else ""
+        if cmd == "make":
+            captured_env.update(kwargs.get("env", {}))
+            sequence.append("popen")
+            return mock_map[cmd]
+        if cmd == "fzf":
+            sequence.append("popen")
+            return mock_map[cmd]
+        return original_popen(args, **kwargs)  # Real for errorformat
+
+    with (
+        patch("subprocess.Popen", side_effect=capture_and_mock),
+        patch("tuick.cli.MonitorThread"),
+    ):
+        runner.invoke(app, ["--verbose", "--", "make"])
+
+    # Phase 1: Verify TUICK_VERBOSE=1 passed to make
+    assert captured_env.get("TUICK_VERBOSE") == "1"
+
+    # Clear verbose state from first invocation
+    if "TUICK_VERBOSE" in os.environ:
+        del os.environ["TUICK_VERBOSE"]
+    tuick.console._verbose = False
+
+    # Phase 2: Simulate nested tuick with captured env
+    # (nested tuick would inherit TUICK_VERBOSE from make's env)
+    ruff_lines = ["src/a.py:10:5: E501\n"]
+    ruff_proc = make_cmd_proc(sequence, "ruff", ruff_lines)
+    ef_jsonl = ['{"filename":"src/a.py","lnum":10,"col":5,"lines":["E501"]}\n']
+    ef_proc = make_errorformat_proc(sequence, ef_jsonl)
+
+    with (
+        patch("subprocess.Popen", side_effect=[ruff_proc, ef_proc]),
+        patch.dict("os.environ", captured_env),
+    ):
+        # No --verbose flag, but TUICK_VERBOSE=1 in env
+        runner.invoke(app, ["--format", "--", "ruff", "src/"])
+
+    # Verify nested tuick enabled verbose from env var
+    output = console_out.getvalue()
+    assert "$ make" in output  # First invocation shows make
+    assert "$ ruff" in output  # Nested tuick should show ruff
+
+
 def test_cli_exclusive_options(console_out: ConsoleFixture) -> None:
     """--reload and --select are mutually exclusive."""
     result = runner.invoke(

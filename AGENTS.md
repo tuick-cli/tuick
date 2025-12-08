@@ -235,6 +235,10 @@
   integration tests. Faster and more focused on the routing logic being tested.
 - Test docstrings: Describe behavior, not command syntax. Keep command names
   lowercase (e.g., "tuick" not "Tuick"). Focus on what the test verifies.
+- Multi-phase integration tests: When testing environment inheritance or state
+  propagation across process boundaries, use capture-and-replay pattern:
+  capture state from phase 1, clean environment, replay with captured state
+  in phase 2. Prevents false positives from state pollution.
 
 ### Test Infrastructure
 
@@ -266,6 +270,10 @@
   requirements and should NOT be mocked in CLI integration tests. Only mock UI
   components (fzf) and use real subprocess calls for required tools. This
   validates actual integration.
+- Mock subprocess recursion: When mocking subprocess.Popen and the mock may
+  trigger additional subprocess calls, save original_popen = subprocess.Popen
+  before patching to avoid infinite recursion. Use original_popen for
+  passthrough cases.
 
 ### Test Synchronization
 
