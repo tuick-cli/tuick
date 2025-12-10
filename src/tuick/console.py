@@ -27,7 +27,10 @@ _trace = False
 
 
 def set_verbose() -> None:
-    """Turn on verbose mode."""
+    """Turn on verbose mode.
+
+    Note: Tests use autouse fixture reset_verbose to clear between tests.
+    """
     global _verbose  # noqa: PLW0603
     _verbose = True
 
