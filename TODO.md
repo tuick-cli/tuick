@@ -5,8 +5,6 @@
   set_verbose in test, output must include the "start" entry message only once.
   Verify it occurs twice when reverting changes in commit 69293d.
 
-- REF[med]: Migrate CLI tests off console_out fixture to capsys.
-
 - TEST[low]: Integration test for nested tuick output collection - verify
   begin-output/save-output/end-output protocol in reload scenario.
 

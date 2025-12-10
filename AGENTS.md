@@ -177,6 +177,9 @@
 
 ### Test Quality
 
+- Test coverage: Never reduce test coverage when refactoring tests. If
+  simplifying a complex test, add separate tests to cover removed scenarios.
+  Integration test modules should document their purpose in module docstrings.
 - testsize: Keep tests compact, fit in ~50 lines. Use helper functions to
   format expected output declaratively
 - Minimize test count: combine related assertions testing the same behavior into
@@ -274,6 +277,16 @@
   trigger additional subprocess calls, save original_popen = subprocess.Popen
   before patching to avoid infinite recursion. Use original_popen for
   passthrough cases.
+- Click/Typer CLI testing: Do not use pytest capture fixtures (capsys/capfd)
+  with Click/Typer test runners. Click's runner captures output internally
+  before pytest can intercept it. Use `result.stdout` and `result.stderr` from
+  Click's Result object. Apply `strip_ansi()` to remove color codes before
+  assertions. Example:
+  ```python
+  result = runner.invoke(app, ["--verbose", "arg"])
+  output = strip_ansi(result.stderr)
+  assert "expected text" in output
+  ```
 
 ### Test Synchronization
 

@@ -141,10 +141,6 @@ def setup_log_file() -> Iterator[None]:
     log file and set TUICK_LOG_FILE so that child processes can use it, then
     copy the log file to stderr when done.
     """
-    if _console.file is not sys.stderr:
-        yield  # Console already redirected, presumably in a test
-        return
-
     with _open_log_file() as (append_file, read_file):
         _console.file = append_file
         try:

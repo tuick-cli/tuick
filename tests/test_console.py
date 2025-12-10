@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def test_setup_log_file_nested_does_not_dump_to_stderr(
-    capfd: pytest.CaptureFixture[str], tmp_path: Path
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     """Nested tuick should append to log file without printing to stderr."""
     log_path = tmp_path / "tuick.log"
@@ -31,13 +31,13 @@ def test_setup_log_file_nested_does_not_dump_to_stderr(
     finally:
         console._console.file = original_file
 
-    captured = capfd.readouterr()
+    captured = capsys.readouterr()
     assert captured.err == ""
     assert "hello" in log_path.read_text()
 
 
 def test_setup_log_file_top_replays_log_to_stderr(
-    capfd: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Top-level tuick copies log contents to stderr on exit."""
     original_file = console._console.file
@@ -51,7 +51,7 @@ def test_setup_log_file_top_replays_log_to_stderr(
     finally:
         console._console.file = original_file
 
-    captured = capfd.readouterr()
+    captured = capsys.readouterr()
     assert captured.out == ""
     assert "child output" in captured.err
     assert "top output" in captured.err

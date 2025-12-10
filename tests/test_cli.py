@@ -1,4 +1,8 @@
-"""Tests for the CLI module."""
+"""Integration tests for the CLI module.
+
+These tests verify end-to-end CLI behavior including command execution, output
+formatting, and interaction with subprocesses.
+"""
 
 import functools
 import io
@@ -15,6 +19,8 @@ import pytest
 import typer.testing
 
 import tuick
+from tuick import console
+from tuick.ansi import strip_ansi
 from tuick.cli import app
 from tuick.reload_socket import ReloadSocketServer
 
@@ -28,7 +34,7 @@ if TYPE_CHECKING:
     # click.testing.Result
     from click.testing import Result as TestingResult
 
-    from .conftest import ConsoleFixture, ServerFixture
+    from .conftest import ServerFixture
 
 
 class CliRunner(typer.testing.CliRunner):
@@ -248,7 +254,7 @@ def test_cli_no_output_no_fzf() -> None:
     ]
 
 
-def test_cli_reload_option(console_out: ConsoleFixture) -> None:
+def test_cli_reload_option() -> None:
     """--reload waits for go response before starting command subprocess."""
     sequence: list[str] = []
 
@@ -291,7 +297,7 @@ def test_cli_reload_option(console_out: ConsoleFixture) -> None:
             "src/test.py\x1f1\x1f\x1f\x1f\x1fsrc/test.py:1: error: Test\0"
         )
         assert result.stdout == expected
-        assert "> Terminating reload command\n" in console_out.getvalue()
+        assert "> Terminating reload command\n" in strip_ansi(result.stderr)
         expected_seq = [
             "terminate",
             "wait",
@@ -310,7 +316,7 @@ def test_cli_reload_option(console_out: ConsoleFixture) -> None:
             sock.sendall(f"secret: {api_key}\nshutdown\n".encode())
 
 
-def test_reload_binding_default_mode(console_out: ConsoleFixture) -> None:
+def test_reload_binding_default_mode() -> None:
     """Default mode: reload binding excludes --top flag."""
     sequence: list[str] = []
     cmd_proc = make_cmd_proc(sequence, "mypy", ["src/a.py:1: error\n"])
@@ -327,9 +333,7 @@ def test_reload_binding_default_mode(console_out: ConsoleFixture) -> None:
     assert "--top" not in fzf_cmd
 
 
-def test_reload_binding_explicit_top_flag(
-    console_out: ConsoleFixture,
-) -> None:
+def test_reload_binding_explicit_top_flag() -> None:
     """Explicit --top: reload binding includes --top flag."""
     sequence: list[str] = []
     cmd_proc = make_cmd_proc(
@@ -347,9 +351,7 @@ def test_reload_binding_explicit_top_flag(
     assert "--top" in fzf_cmd
 
 
-def test_reload_binding_autodetect_excludes_top(
-    console_out: ConsoleFixture,
-) -> None:
+def test_reload_binding_autodetect_excludes_top() -> None:
     """Auto-detected build system: reload binding excludes --top."""
     sequence: list[str] = []
     cmd_proc = make_cmd_proc(
@@ -367,7 +369,7 @@ def test_reload_binding_autodetect_excludes_top(
     assert "--top" not in fzf_cmd
 
 
-def test_cli_select_plain(console_out: ConsoleFixture) -> None:
+def test_cli_select_plain() -> None:
     """--select option opens editor at location and prints nothing."""
     with (
         patch("tuick.cli.subprocess.run") as mock_run,
@@ -381,12 +383,12 @@ def test_cli_select_plain(console_out: ConsoleFixture) -> None:
         args = app, ["--select", "src/test.py", "10", "5", "", ""]
         result = runner.invoke(*args)
         assert result.exit_code == 0
-        assert console_out.getvalue() == ""
+        assert strip_ansi(result.stderr) == ""
         command = ["vi", "+10", "+normal! 5l", "src/test.py"]
         mock_run.assert_called_once_with(command, check=True)
 
 
-def test_cli_select_verbose(console_out: ConsoleFixture) -> None:
+def test_cli_select_verbose() -> None:
     """--verbose --select prints the command to execute."""
     with (
         patch("tuick.cli.subprocess.run") as mock_run,
@@ -403,11 +405,11 @@ def test_cli_select_verbose(console_out: ConsoleFixture) -> None:
             "> tuick --verbose --select src/test.py 10 5 '' ''\n"
             "  $ vi +10 '+normal! 5l' src/test.py\n"
         )
-        assert console_out.getvalue() == expected
+        assert strip_ansi(result.stderr) == expected
         mock_run.assert_called_once()
 
 
-def test_cli_select_error(console_out: ConsoleFixture) -> None:
+def test_cli_select_error() -> None:
     """--select prints a message if the editor exits with error."""
     with (
         patch("tuick.cli.subprocess.run") as mock_run,
@@ -424,37 +426,36 @@ def test_cli_select_error(console_out: ConsoleFixture) -> None:
         result = runner.invoke(*args)
         assert result.exit_code == 1
         mock_run.assert_called_once_with(ANY, check=True)
-        assert console_out.getvalue() == "Error: Editor exit status: 1\n"
+        assert strip_ansi(result.stderr) == "Error: Editor exit status: 1\n"
 
 
-def test_cli_select_no_location_found(console_out: ConsoleFixture) -> None:
+def test_cli_select_no_location_found() -> None:
     """--select with no location (empty file) does nothing."""
     with patch("tuick.cli.subprocess.run") as mock_run:
         result = runner.invoke(app, ["--select", "", "", "", "", ""])
         assert result.exit_code == 0
-        assert console_out.getvalue() == ""
+        assert strip_ansi(result.stderr) == ""
         # Verify editor was not called
         mock_run.assert_not_called()
 
 
-def test_cli_select_verbose_no_location(console_out: ConsoleFixture) -> None:
+def test_cli_select_verbose_no_location() -> None:
     """--verbose --select with no location prints a message."""
     with patch("tuick.cli.subprocess.run") as mock_run:
         result = runner.invoke(
             app, ["--verbose", "--select", "", "", "", "", ""]
         )
         assert result.exit_code == 0
-        assert console_out.getvalue() == dedent("""\
+        expected = dedent("""\
             > tuick --verbose --select '' '' '' '' ''
             No location in selection (informational block)
         """)
+        assert strip_ansi(result.stderr) == expected
         # Verify editor was not called
         mock_run.assert_not_called()
 
 
-def test_verbose_propagates_to_child_processes(
-    console_out: ConsoleFixture,
-) -> None:
+def test_verbose_propagates_to_child_processes() -> None:
     """--verbose propagates to nested tuick via TUICK_VERBOSE env var."""
     sequence: list[str] = []
     make_lines = [
@@ -465,7 +466,7 @@ def test_verbose_propagates_to_child_processes(
     fzf_proc = make_fzf_proc(sequence)
     mock_map = {"make": cmd_proc, "fzf": fzf_proc}
 
-    # Capture env passed to make, then invoke nested tuick with that env
+    # Capture env passed to make
     captured_env: dict[str, str] = {}
     original_popen = subprocess.Popen
 
@@ -484,37 +485,46 @@ def test_verbose_propagates_to_child_processes(
         patch("subprocess.Popen", side_effect=capture_and_mock),
         patch("tuick.cli.MonitorThread"),
     ):
-        runner.invoke(app, ["--verbose", "--", "make"])
+        result = runner.invoke(app, ["--verbose", "--", "make"])
 
-    # Phase 1: Verify TUICK_VERBOSE=1 passed to make
+    # Verify TUICK_VERBOSE=1 passed to children
     assert captured_env.get("TUICK_VERBOSE") == "1"
-
-    # Clear verbose state from first invocation
-    if "TUICK_VERBOSE" in os.environ:
-        del os.environ["TUICK_VERBOSE"]
-    tuick.console._verbose = False
-
-    # Phase 2: Simulate nested tuick with captured env
-    # (nested tuick would inherit TUICK_VERBOSE from make's env)
-    ruff_lines = ["src/a.py:10:5: E501\n"]
-    ruff_proc = make_cmd_proc(sequence, "ruff", ruff_lines)
-    ef_jsonl = ['{"filename":"src/a.py","lnum":10,"col":5,"lines":["E501"]}\n']
-    ef_proc = make_errorformat_proc(sequence, ef_jsonl)
-
-    with (
-        patch("subprocess.Popen", side_effect=[ruff_proc, ef_proc]),
-        patch.dict("os.environ", captured_env),
-    ):
-        # No --verbose flag, but TUICK_VERBOSE=1 in env
-        runner.invoke(app, ["--format", "--", "ruff", "src/"])
-
-    # Verify nested tuick enabled verbose from env var
-    output = console_out.getvalue()
-    assert "$ make" in output  # First invocation shows make
-    assert "$ ruff" in output  # Nested tuick should show ruff
+    # Verify verbose output shows the command
+    output = strip_ansi(result.stderr)
+    assert "$ make" in output
 
 
-def test_cli_exclusive_options(console_out: ConsoleFixture) -> None:
+def test_tuick_verbose_env_var_enables_verbose_mode() -> None:
+    """TUICK_VERBOSE=1 environment variable enables verbose output."""
+    # Temporarily override clean_env fixture by explicitly setting the var
+    original_clean = os.environ.copy()
+    try:
+        os.environ["TUICK_VERBOSE"] = "1"
+        console._verbose = False  # Start with verbose off
+
+        with (
+            patch("tuick.cli.subprocess.run") as mock_run,
+            patch.dict(os.environ, {"EDITOR": "vi"}, clear=False),
+        ):
+            mock_run.return_value = create_autospec(
+                subprocess.CompletedProcess, instance=True
+            )
+            mock_run.return_value.returncode = 0
+            result = runner.invoke(
+                app, ["--select", "foo.py", "10", "0", "", ""]
+            )
+
+        # Verbose mode should be enabled from env var
+        output = strip_ansi(result.stderr)
+        assert "> tuick" in output
+        assert "$ vi" in output
+    finally:
+        # Restore original env
+        os.environ.clear()
+        os.environ.update(original_clean)
+
+
+def test_cli_exclusive_options() -> None:
     """--reload and --select are mutually exclusive."""
     result = runner.invoke(
         app, ["--reload", "--select", "foo", "--", "mypy", "src/"]
@@ -524,10 +534,10 @@ def test_cli_exclusive_options(console_out: ConsoleFixture) -> None:
         "Error: Options --reload, --select, --start, --message, --format,"
         " and --top are mutually exclusive\n"
     )
-    assert console_out.getvalue() == expected
+    assert strip_ansi(result.stderr) == expected
 
 
-def test_reload_with_top_allowed(console_out: ConsoleFixture) -> None:
+def test_reload_with_top_allowed() -> None:
     """--reload and --top should work together."""
     with patch("tuick.cli.reload_command") as mock_reload:
         result = runner.invoke(
@@ -535,14 +545,14 @@ def test_reload_with_top_allowed(console_out: ConsoleFixture) -> None:
         )
     # Should NOT fail with mutual exclusivity error
     assert result.exit_code == 0
-    assert "mutually exclusive" not in console_out.getvalue()
+    assert "mutually exclusive" not in strip_ansi(result.stderr)
     # Verify reload_command was called with top_mode=True
     assert mock_reload.call_count == 1
     _args, kwargs = mock_reload.call_args
     assert kwargs["top_mode"] is True
 
 
-def test_reload_top_conflicts_with_select(console_out: ConsoleFixture) -> None:
+def test_reload_top_conflicts_with_select() -> None:
     """--reload --top should conflict with --select."""
     result = runner.invoke(
         app, ["--reload", "--top", "--select", "foo", "--", "make"]
@@ -552,10 +562,10 @@ def test_reload_top_conflicts_with_select(console_out: ConsoleFixture) -> None:
         "Error: Options --reload, --select, --start, --message, --format,"
         " and --top are mutually exclusive"
     )
-    assert expected in console_out.getvalue()
+    assert expected in strip_ansi(result.stderr)
 
 
-def test_reload_autodetects_list_mode(console_out: ConsoleFixture) -> None:
+def test_reload_autodetects_list_mode() -> None:
     """Reload auto-detects list mode for ruff (non-build-system)."""
     with patch("tuick.cli.reload_command") as mock_reload:
         result = runner.invoke(app, ["--reload", "--", "ruff", "check"])
@@ -566,7 +576,7 @@ def test_reload_autodetects_list_mode(console_out: ConsoleFixture) -> None:
     assert kwargs["top_mode"] is False
 
 
-def test_reload_autodetects_build_system(console_out: ConsoleFixture) -> None:
+def test_reload_autodetects_build_system() -> None:
     """Reload auto-detects top-mode for just (build system)."""
     with patch("tuick.cli.reload_command") as mock_reload:
         result = runner.invoke(app, ["--reload", "--", "just", "check"])
@@ -577,7 +587,7 @@ def test_reload_autodetects_build_system(console_out: ConsoleFixture) -> None:
     assert kwargs["top_mode"] is True
 
 
-def test_reload_explicit_top_forces_mode(console_out: ConsoleFixture) -> None:
+def test_reload_explicit_top_forces_mode() -> None:
     """Reload with explicit --top forces top-mode for any tool."""
     with patch("tuick.cli.reload_command") as mock_reload:
         result = runner.invoke(
@@ -590,9 +600,7 @@ def test_reload_explicit_top_forces_mode(console_out: ConsoleFixture) -> None:
     assert kwargs["top_mode"] is True
 
 
-def test_cli_abort_after_initial_load_prints_output(
-    console_out: ConsoleFixture,
-) -> None:
+def test_cli_abort_after_initial_load_prints_output() -> None:
     """On fzf abort (exit 130) after initial load, print initial output."""
     sequence: list[str] = []
 
@@ -789,7 +797,7 @@ def test_errorformat_format_structured(
 
 
 def test_errorformat_missing_shows_error(
-    console_out: ConsoleFixture, nested_tuick: ReloadSocketServer
+    nested_tuick: ReloadSocketServer,
 ) -> None:
     """Show clear error when errorformat not installed and --format used."""
     sequence: list[str] = []
@@ -808,33 +816,31 @@ def test_errorformat_missing_shows_error(
         result = runner.invoke(app, ["--format", "--", "mypy", "src/"])
 
     assert result.exit_code != 0
-    output = console_out.getvalue()
+    output = strip_ansi(result.stderr)
     assert "errorformat not found" in output
     assert "go install" in output
 
 
-def test_format_name_and_pattern_exclusive(
-    console_out: ConsoleFixture,
-) -> None:
+def test_format_name_and_pattern_exclusive() -> None:
     """-f and -p options are mutually exclusive."""
     args = ["-f", "mypy", "-p", "%f:%l: %m", "--", "mypy", "src/"]
     result = runner.invoke(app, args)
     assert result.exit_code != 0
-    output = console_out.getvalue()
+    output = strip_ansi(result.stderr)
     assert "mutually exclusive" in output
 
 
-def test_unsupported_tool_without_options(console_out: ConsoleFixture) -> None:
+def test_unsupported_tool_without_options() -> None:
     """Unsupported tool without -f or -p shows error."""
     with patch("tuick.tool_registry.detect_tool", return_value="unsupported"):
         result = runner.invoke(app, ["--", "unsupported", "src/"])
     assert result.exit_code != 0
-    output = console_out.getvalue()
+    output = strip_ansi(result.stderr)
     assert "not supported" in output
     assert "-f/--format-name" in output or "-p/--pattern" in output
 
 
-def test_custom_pattern_option(console_out: ConsoleFixture) -> None:
+def test_custom_pattern_option() -> None:
     """Using -p with custom patterns."""
     sequence: list[str] = []
     fzf_proc = make_fzf_proc(sequence)
@@ -862,7 +868,7 @@ def test_custom_pattern_option(console_out: ConsoleFixture) -> None:
     assert actual.format_for_test() == expected_format
 
 
-def test_format_name_option(console_out: ConsoleFixture) -> None:
+def test_format_name_option() -> None:
     """Using -f to override autodetected format."""
     sequence: list[str] = []
     fzf_proc = make_fzf_proc(sequence)
