@@ -214,6 +214,15 @@
   better confidence with less maintenance. Use unit tests with mocking only
   when testing complex behavior with multiple edge cases requiring controlled
   inputs.
+- Do not patch SUT components: only mock external dependencies (UI, external
+  processes). Core application components like ReloadSocketServer are part of
+  the SUT and must run real code.
+- Tests must not compensate for SUT deviations: do not add workarounds (like
+  calling .end_output() manually) to make tests pass when SUT behavior is
+  incorrect. Tests document expected behavior; workarounds hide real bugs.
+- Never silently handle corrupted input: assert and fail fast when detecting
+  invalid data (e.g., Mock objects where strings expected). Silent failures
+  hide bugs.
 - Checking complex structures:
   - When comparing complex structures (lists, dicts, dataclasses) in tests
   - Do not assert comparisons to the value of individual members
