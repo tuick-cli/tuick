@@ -1,10 +1,5 @@
 # Tuick Task List
 
-- TEST[med]: Test nested tuick verbosity output. Integration test, simulate fzf
-  scenario where top tuick starts fzf and fzf run the start handler, with
-  set_verbose in test, output must include the "start" entry message only once.
-  Verify it occurs twice when reverting changes in commit 69293d.
-
 - TEST[low]: Integration test for nested tuick output collection - verify
   begin-output/save-output/end-output protocol in reload scenario.
 

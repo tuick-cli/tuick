@@ -22,6 +22,7 @@ import tuick
 from tuick import console
 from tuick.ansi import strip_ansi
 from tuick.cli import app
+from tuick.console import set_verbose
 from tuick.reload_socket import ReloadSocketServer
 
 from .test_data import MYPY_BLOCKS
@@ -522,6 +523,42 @@ def test_tuick_verbose_env_var_enables_verbose_mode() -> None:
         # Restore original env
         os.environ.clear()
         os.environ.update(original_clean)
+
+
+def test_nested_verbose_output_not_duplicated() -> None:
+    """Nested tuick doesn't duplicate verbose output."""
+    set_verbose()
+    sequence: list[str] = []
+    make_lines = ["\x02src/a.py\x1f1\x1f1\x1f\x1f\x1ferror\0\x03"]
+    cmd_proc = make_cmd_proc(sequence, "make", make_lines)
+    fzf_proc = make_fzf_proc(sequence)
+
+    nested_result: TestingResult | None = None
+
+    def fzf_exit_with_nested(*args: Any) -> bool:  # noqa: ANN401
+        """Simulate fzf start handler invoking nested tuick --start."""
+        nonlocal nested_result
+        with (
+            patch.dict(os.environ, {"FZF_PORT": "12345"}),
+            patch("tuick.cli._send_to_tuick_server"),
+        ):
+            nested_result = runner.invoke(app, ["--start"])
+        sequence.append("fzf:exit")
+        return False
+
+    fzf_proc.__exit__.side_effect = fzf_exit_with_nested
+    mock_map = {"make": cmd_proc, "fzf": fzf_proc}
+
+    with (
+        patch_popen_selective(sequence, mock_map),
+        patch("tuick.cli.MonitorThread"),
+    ):
+        result = runner.invoke(app, ["--", "make"])
+
+    # Check total count across both invocations
+    assert nested_result is not None
+    total_stderr = result.stderr + nested_result.stderr
+    assert strip_ansi(total_stderr).count("> tuick --start") == 1
 
 
 def test_cli_exclusive_options() -> None:

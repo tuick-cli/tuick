@@ -142,11 +142,12 @@ def setup_log_file() -> Iterator[None]:
     copy the log file to stderr when done.
     """
     with _open_log_file() as (append_file, read_file):
+        saved_file = _console.file
         _console.file = append_file
         try:
             yield
         finally:
-            _console.file = sys.stderr
+            _console.file = saved_file
             if read_file:
                 while chunk := read_file.read(64 * 1024):
                     sys.stderr.write(chunk)
