@@ -1,8 +1,5 @@
 # Tuick Task List
 
-- TEST[med]: Modify patch_popen and its users to assert that popen argument
-  list is consistent with behavior provided by popen mock.
-
 - REF[med]: Remove needless argument and call tracking from tests. Use Mock
   special attributes (mock_calls, call_args_list) instead of manual tracking.
 

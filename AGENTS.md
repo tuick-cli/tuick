@@ -545,6 +545,10 @@ Git history shows what was done. Plan files show what remains.
 - Never silently handle corrupted input: assert and fail fast when detecting
   invalid data (e.g., Mock objects where strings expected). Silent failures
   hide bugs.
+- Assert messages: Don't add trivial assert messages. Pytest already shows actual
+  vs expected values by default. Only add messages when they provide context
+  that the bare assertion values don't give. Example: use `assert x == y` not
+  `assert x == y, f"expected {y}, got {x}"`.
 - Checking complex structures:
   - When comparing complex structures (lists, dicts, dataclasses) in tests
   - Do not assert comparisons to the value of individual members

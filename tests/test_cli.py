@@ -105,6 +105,7 @@ def make_fzf_proc(sequence: list[str], returncode: int = 0) -> Mock:
     )[1]
     proc.stdin.close.side_effect = track(sequence, "fzf:close")
     proc.wait.side_effect = track(sequence, "fzf:wait")
+    proc.expected_command = "fzf"
     return proc
 
 
@@ -130,6 +131,7 @@ def make_errorformat_proc(
 
     proc.__enter__.side_effect = track(sequence, "errorformat:enter", ret=proc)
     proc.__exit__.side_effect = track(sequence, "errorformat:exit", ret=False)
+    proc.expected_command = "errorformat"
     return proc
 
 
@@ -147,6 +149,13 @@ def patch_popen(sequence: list[str], procs: list[Mock]) -> Any:  # noqa: ANN401
         sequence.append("popen")
         proc = procs[index]
         index += 1
+        if hasattr(proc, "expected_command"):
+            cmd_args = args[0]
+            if isinstance(cmd_args, list):
+                actual_cmd = cmd_args[0]
+            else:
+                actual_cmd = cmd_args.split()[0]
+            assert actual_cmd == proc.expected_command
         env = kwargs.get("env")
         if env:
             for k, v in env.items():
@@ -242,9 +251,7 @@ def test_cli_default_launches_fzf() -> None:
 
     assert popen_mock.call_args_list[0].args[0] == ["flake8", "src/"]
     assert popen_mock.call_args_list[0].kwargs["stdout"] == subprocess.PIPE
-    assert popen_mock.call_args_list[1].args[0][0] == "errorformat"
     assert popen_mock.call_args_list[1].kwargs["stdin"] == subprocess.PIPE
-    assert popen_mock.call_args_list[2].args[0][0] == "fzf"
     assert popen_mock.call_args_list[2].kwargs["stdin"] == subprocess.PIPE
 
     assert sequence == [
