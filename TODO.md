@@ -1,8 +1,5 @@
 # Tuick Task List
 
-- BUG[low]: Review _parse_top_mode change from content.strip() to content -
-  whitespace-only blocks now processed differently. File: src/tuick/cli.py:671
-
 - BUG[med] Do not output block delimiters if a tool produces no output, so
   consecutive commands without output are grouped in one block.
 
