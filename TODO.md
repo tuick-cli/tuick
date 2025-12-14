@@ -1,8 +1,5 @@
 # Tuick Task List
 
-- BUG[med] Do not output block delimiters if a tool produces no output, so
-  consecutive commands without output are grouped in one block.
-
 - BUG[med] Errorformat line matching: Current implementation uses dict mapping
   from stripped lines to original ANSI lines. This fails if duplicate stripped
   lines exist. Implement proper matching algorithm that handles:
